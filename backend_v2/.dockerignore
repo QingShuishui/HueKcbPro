@@ -1,0 +1,16 @@
+.git
+.github
+.pytest_cache
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+.venv
+venv
+runtime.db
+tests
+docker-compose.yml
+docker-compose.release.yml
+.env
+.env.release

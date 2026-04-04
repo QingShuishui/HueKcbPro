@@ -1,0 +1,26 @@
+# Web框架
+flask>=3.0.0
+
+# HTML解析
+beautifulsoup4>=4.12.0
+
+# HTTP请求
+requests>=2.31.0
+
+# 验证码识别
+ddddocr>=1.4.11
+
+# 图像处理
+pillow>=10.0.0
+
+# HTML解析器
+lxml>=4.9.0
+
+# Testing
+pytest>=8.0.0
+
+# Crypto
+cryptography>=42.0.0
+
+# Env
+python-dotenv>=1.0.1

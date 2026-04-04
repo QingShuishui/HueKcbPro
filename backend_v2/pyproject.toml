@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "kcb-backend-v2"
+version = "0.1.0"
+requires-python = ">=3.13"
+dependencies = [
+  "fastapi>=0.116.0",
+  "uvicorn[standard]>=0.35.0",
+  "pydantic-settings>=2.10.0",
+  "sqlalchemy>=2.0.43",
+  "alembic>=1.16.0",
+  "psycopg[binary]>=3.2.0",
+  "PyJWT>=2.9.0",
+  "redis>=6.4.0",
+  "celery>=5.5.0",
+  "httpx>=0.28.0",
+  "cryptography>=45.0.0",
+  "beautifulsoup4>=4.13.0",
+  "lxml>=6.0.0",
+  "requests>=2.32.0",
+  "ddddocr>=1.5.6",
+  "sentry-sdk[fastapi]>=2.35.0",
+  "python-multipart>=0.0.20",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.4.0",
+  "pytest-cov>=6.2.0",
+]
+
+[tool.setuptools.packages.find]
+include = ["app*"]

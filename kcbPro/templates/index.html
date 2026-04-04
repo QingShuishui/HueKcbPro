@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HUE课程表</title>
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;800&family=ZCOOL+KuaiLe&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container landing-shell">
+        <header class="landing-header">
+            <div class="title-group">
+                <h1>课程表 ✏️</h1>
+                <p>保留原来的首页，用来展示入口和使用方式。</p>
+            </div>
+            <a class="landing-login-link" href="{{ url_for('login') }}">去登录</a>
+        </header>
+
+        <section class="landing-hero">
+            <div class="landing-card">
+                <p class="login-card__eyebrow">HUE Timetable</p>
+                <h2>登录后生成专属 8 位链接</h2>
+                <p>每个用户保存自己的学号、密码和开学日期。后续打开专属链接时，系统会自动重新登录教务系统并显示课表。</p>
+                <div class="landing-actions">
+                    <a class="login-submit landing-submit" href="{{ url_for('login') }}">立即登录</a>
+                </div>
+            </div>
+        </section>
+
+        <nav class="bottom-nav" aria-label="底部导航">
+            <a href="#" class="nav-item active" id="homeNavTrigger">
+                <span class="nav-icon">🏠</span>
+                <span class="nav-label">首页</span>
+            </a>
+            <a href="{{ url_for('login') }}" class="nav-item">
+                <span class="nav-icon">🔐</span>
+                <span class="nav-label">登录</span>
+            </a>
+        </nav>
+    </div>
+</body>
+</html>

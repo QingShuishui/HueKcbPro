@@ -1,0 +1,96 @@
+<h2>课程表主导的新布局</h2>
+<p class="subtitle">重点：页面主体始终是课程表，上方只保留一条可横滑的日期条，点击日期切换到对应周次。</p>
+
+<div class="mockup">
+  <div class="mockup-header">HUE课程表Pro · 课表页重构</div>
+  <div class="mockup-body">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap;margin-bottom:14px;">
+      <div>
+        <div class="label">当前周</div>
+        <h3 style="margin:0 0 4px 0;">第 6 周</h3>
+        <p class="subtitle" style="margin:0;">点击上方日期后，自动切到该日期所在周</p>
+      </div>
+      <div style="display:flex;gap:10px;">
+        <div class="mock-button">刷新</div>
+        <div class="mock-button">设置</div>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:10px;overflow:auto;padding:4px 0 12px 0;margin-bottom:12px;">
+      <div style="min-width:84px;background:#111827;color:#fff;border-radius:18px;padding:10px 12px;text-align:center;">
+        <div style="font-size:12px;opacity:.8;">周一</div>
+        <div style="font-weight:800;font-size:18px;">04/06</div>
+      </div>
+      <div style="min-width:84px;background:#FFF7ED;border:1px solid #FED7AA;border-radius:18px;padding:10px 12px;text-align:center;">
+        <div style="font-size:12px;color:#9A3412;">周二</div>
+        <div style="font-weight:800;font-size:18px;color:#9A3412;">04/07</div>
+      </div>
+      <div style="min-width:84px;background:#FFF7ED;border:1px solid #FED7AA;border-radius:18px;padding:10px 12px;text-align:center;">
+        <div style="font-size:12px;color:#9A3412;">周三</div>
+        <div style="font-weight:800;font-size:18px;color:#9A3412;">04/08</div>
+      </div>
+      <div style="min-width:84px;background:#FFF7ED;border:1px solid #FED7AA;border-radius:18px;padding:10px 12px;text-align:center;">
+        <div style="font-size:12px;color:#9A3412;">周四</div>
+        <div style="font-weight:800;font-size:18px;color:#9A3412;">04/09</div>
+      </div>
+      <div style="min-width:84px;background:#FFF7ED;border:1px solid #FED7AA;border-radius:18px;padding:10px 12px;text-align:center;">
+        <div style="font-size:12px;color:#9A3412;">周五</div>
+        <div style="font-weight:800;font-size:18px;color:#9A3412;">04/10</div>
+      </div>
+      <div style="min-width:84px;background:#FDF2F8;border:1px solid #FBCFE8;border-radius:18px;padding:10px 12px;text-align:center;">
+        <div style="font-size:12px;color:#9D174D;">周六</div>
+        <div style="font-weight:800;font-size:18px;color:#9D174D;">04/11</div>
+      </div>
+      <div style="min-width:84px;background:#FDF2F8;border:1px solid #FBCFE8;border-radius:18px;padding:10px 12px;text-align:center;">
+        <div style="font-size:12px;color:#9D174D;">周日</div>
+        <div style="font-weight:800;font-size:18px;color:#9D174D;">04/12</div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:70px repeat(7, minmax(118px,1fr));gap:8px;">
+      <div class="placeholder" style="min-height:52px;">时间</div>
+      <div class="placeholder" style="min-height:52px;">周一</div>
+      <div class="placeholder" style="min-height:52px;">周二</div>
+      <div class="placeholder" style="min-height:52px;">周三</div>
+      <div class="placeholder" style="min-height:52px;">周四</div>
+      <div class="placeholder" style="min-height:52px;">周五</div>
+      <div class="placeholder" style="min-height:52px;">周六</div>
+      <div class="placeholder" style="min-height:52px;">周日</div>
+
+      <div class="placeholder" style="min-height:108px;">1-2节</div>
+      <div style="background:#FEE2E2;border-radius:18px;padding:12px;min-height:108px;">
+        <strong>软件测试技术</strong><br>
+        <span class="subtitle">S4409 · 张三</span>
+      </div>
+      <div style="background:#FCFCFD;border:1px dashed #E5E7EB;border-radius:18px;min-height:108px;"></div>
+      <div style="background:#DCFCE7;border-radius:18px;padding:12px;min-height:108px;">
+        <strong>数据结构</strong><br>
+        <span class="subtitle">N1201 · 李四</span>
+      </div>
+      <div style="background:#FCFCFD;border:1px dashed #E5E7EB;border-radius:18px;min-height:108px;"></div>
+      <div style="background:#E0F2FE;border-radius:18px;padding:12px;min-height:108px;">
+        <strong>数据库原理</strong><br>
+        <span class="subtitle">B2302 · 王五</span>
+      </div>
+      <div style="background:#FCFCFD;border:1px dashed #E5E7EB;border-radius:18px;min-height:108px;"></div>
+      <div style="background:#FCFCFD;border:1px dashed #E5E7EB;border-radius:18px;min-height:108px;"></div>
+    </div>
+  </div>
+</div>
+
+<div class="options">
+  <div class="option" data-choice="date_strip_primary" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>日期条主导</h3>
+      <p>上方只保留横向日期条，课程表区域尽可能完整，占据绝大部分空间。</p>
+    </div>
+  </div>
+  <div class="option" data-choice="week_selector_keep" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>保留周次条</h3>
+      <p>仍然保留现在的周次 chips，但视觉和信息密度会比方案 A 更重。</p>
+    </div>
+  </div>
+</div>

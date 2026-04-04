@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>登录</title>
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;800&family=ZCOOL+KuaiLe&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  </head>
+  <body>
+    <div class="login-shell">
+      <div class="login-card">
+        <div class="login-card__header">
+          <p class="login-card__eyebrow">HUE Timetable</p>
+          <h1>登录后生成专属课表链接</h1>
+          <p class="login-card__hint">首次登录后会生成一个短链接，后续直接访问该链接即可查看你的课表。</p>
+        </div>
+
+        {% if error %}
+          <div class="login-error">{{ error }}</div>
+        {% endif %}
+
+        <form action="{{ url_for('login') }}" method="post" class="login-form">
+          <label class="login-field">
+            <span>学号</span>
+            <input name="username" type="text" autocomplete="username" required />
+          </label>
+
+          <label class="login-field">
+            <span>密码</span>
+            <input name="password" type="password" autocomplete="current-password" required />
+          </label>
+
+          <button type="submit" class="login-submit">登录并生成链接</button>
+        </form>
+      </div>
+    </div>
+  </body>
+</html>

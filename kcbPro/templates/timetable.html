@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>课程表</title>
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;800&family=ZCOOL+KuaiLe&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <div id="loading" class="loading-overlay">
+            <div class="loading-dots">
+                <div class="dot-item"></div>
+                <div class="dot-item"></div>
+                <div class="dot-item"></div>
+                <div class="dot-item"></div>
+            </div>
+            <div class="loading-text">
+                加载中<span class="dot">.</span><span class="dot">.</span><span class="dot">.</span>
+            </div>
+        </div>
+
+        <div id="error-msg" class="error">
+            <h2>哎呀，出错了 (qwq)</h2>
+            <p id="error-text"></p>
+        </div>
+
+        <header>
+            <div class="title-group">
+                <h1>课程表 ✏️</h1>
+                <p id="semester-info">正在加载学期信息...</p>
+                <p id="generated-at" style="font-size: 0.8rem;"></p>
+            </div>
+
+            <div class="header-actions">
+                <nav class="view-switch desktop-switch" aria-label="页面切换">
+                    <button type="button" class="view-switch__item is-active" data-view-target="home">首页</button>
+                    <button type="button" class="view-switch__item" data-view-target="settings">设置</button>
+                </nav>
+                <select id="weekSelect" onchange="changeWeek()">
+                    <option value="all" {% if selected_week is none %}selected{% endif %}>(全部课程)</option>
+                    {% if current_week %}
+                    <option value="current" {% if selected_week == current_week %}selected{% endif %}>
+                        当前周 (第{{ current_week }}周) ⭐
+                    </option>
+                    {% endif %}
+                    {% for w in range(1, 31) %}
+                    <option value="{{ w }}" {% if selected_week == w %}selected{% endif %}>
+                        第{{ w }}周{% if w == current_week %} ←{% endif %}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+        </header>
+
+        <section class="save-link-banner{% if not show_link_hint %} is-hidden{% endif %}" id="saveLinkBanner" data-show-link-hint="{{ 'true' if show_link_hint else 'false' }}">
+            <p>登录成功。请保存此链接，下次可直接访问。</p>
+            <input id="savedLinkInput" type="text" value="{{ saved_link }}" readonly>
+            <div class="save-link-actions">
+                <button type="button" class="save-link-copy" id="bannerCopyLinkButton">复制链接</button>
+                <span class="save-link-status" id="bannerCopyLinkStatus" aria-live="polite"></span>
+            </div>
+            <span class="save-link-note">后续如需再次复制，可在设置页中操作。</span>
+        </section>
+
+        <main class="page-views">
+            <section class="page-view is-active" id="homeView" data-view="home">
+                <div class="date-strip" id="dateStrip">
+                    <div class="time-label">时间</div>
+                    <div class="date-item" data-day="0">
+                        <span class="weekday">周一</span>
+                        <span class="date-num">-</span>
+                    </div>
+                    <div class="date-item" data-day="1">
+                        <span class="weekday">周二</span>
+                        <span class="date-num">-</span>
+                    </div>
+                    <div class="date-item" data-day="2">
+                        <span class="weekday">周三</span>
+                        <span class="date-num">-</span>
+                    </div>
+                    <div class="date-item" data-day="3">
+                        <span class="weekday">周四</span>
+                        <span class="date-num">-</span>
+                    </div>
+                    <div class="date-item" data-day="4">
+                        <span class="weekday">周五</span>
+                        <span class="date-num">-</span>
+                    </div>
+                    <div class="date-item" data-day="5">
+                        <span class="weekday">周六</span>
+                        <span class="date-num">-</span>
+                    </div>
+                    <div class="date-item" data-day="6">
+                        <span class="weekday">周日</span>
+                        <span class="date-num">-</span>
+                    </div>
+                </div>
+
+                <div class="timetable" id="timetable">
+                    <div class="day-header"></div>
+                    <div class="day-header">MON<br>周一</div>
+                    <div class="day-header">TUE<br>周二</div>
+                    <div class="day-header">WED<br>周三</div>
+                    <div class="day-header">THU<br>周四</div>
+                    <div class="day-header">FRI<br>周五</div>
+                    <div class="day-header">SAT<br>周六</div>
+                    <div class="day-header">SUN<br>周日</div>
+                </div>
+            </section>
+
+            <section class="page-view settings-view" id="settingsView" data-view="settings" hidden>
+                <div class="settings-sheet">
+                    <div class="settings-sheet__header">
+                        <div>
+                            <p class="settings-sheet__eyebrow">当前 Token 设置</p>
+                            <h2>设置</h2>
+                        </div>
+                        <p class="settings-sheet__hint">修改后会直接作用于当前专属链接。</p>
+                    </div>
+
+                    <form class="settings-form" id="settingsForm">
+                        <label class="settings-field">
+                            <span>学号</span>
+                            <input type="text" id="settingsUsername" name="username" value="{{ username }}" autocomplete="username" required>
+                        </label>
+
+                        <label class="settings-field">
+                            <span>密码</span>
+                            <input type="password" id="settingsPassword" name="password" value="{{ password }}" autocomplete="current-password" required>
+                        </label>
+
+                        <label class="settings-field">
+                            <span>开学日期</span>
+                            <input type="date" id="settingsSemesterStartDate" name="semester_start_date" value="{{ semester_start_date }}" required>
+                        </label>
+
+                        <label class="settings-field">
+                            <span>当前访问链接</span>
+                            <input type="text" id="settingsSavedLink" value="{{ saved_link }}" readonly>
+                        </label>
+
+                        <div class="settings-actions">
+                            <button type="submit" class="settings-primary">保存设置</button>
+                            <button type="button" class="settings-secondary" id="settingsCopyLinkButton">复制当前链接</button>
+                            <button type="button" class="settings-secondary" id="settingsShareLinkButton">分享此课程表</button>
+                        </div>
+
+                        <p class="settings-status" id="settingsStatus" aria-live="polite"></p>
+                    </form>
+                </div>
+            </section>
+        </main>
+
+        <nav class="bottom-nav" aria-label="底部导航">
+            <a href="#" class="nav-item active" id="homeNavTrigger" data-view-target="home">
+                <span class="nav-icon">🏠</span>
+                <span class="nav-label">首页</span>
+            </a>
+            <a href="#" class="nav-item" id="mobileSettingsTrigger" data-view-target="settings">
+                <span class="nav-icon">⚙</span>
+                <span class="nav-label">设置</span>
+            </a>
+        </nav>
+
+        <footer>
+            <p>Keep learning, keep shining! (｡•̀ᴗ-)✧</p>
+        </footer>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/script.js') }}"></script>
+    <script>
+        window.scheduleToken = {{ token|tojson }};
+        window.savedLink = {{ saved_link|tojson }};
+        window.initialSettings = {
+            username: {{ username|tojson }},
+            password: {{ password|tojson }},
+            semester_start_date: {{ semester_start_date|tojson }}
+        };
+        const isWeekendFromServer = {{ 'true' if (is_weekend|default(false)) else 'false' }};
+    </script>
+</body>
+</html>
