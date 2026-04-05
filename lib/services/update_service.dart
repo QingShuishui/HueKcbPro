@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
 
+import '../core/network/api_base_url.dart';
 import '../models/update_info.dart';
 
 class UpdateServiceException implements Exception {
@@ -20,8 +21,11 @@ class UpdateServiceException implements Exception {
 class UpdateService {
   UpdateService({
     HttpClient? httpClient,
-    this.updateMetadataUrl = 'http://127.0.0.1:8000/api/v1/app/update/android',
-  }) : _httpClient = httpClient ?? HttpClient();
+    String? updateMetadataUrl,
+  }) : updateMetadataUrl =
+           updateMetadataUrl ??
+           ApiBaseUrl.resolveAndroidUpdateMetadataUrl(isAndroid: true),
+       _httpClient = httpClient ?? HttpClient();
 
   static const MethodChannel _channel = MethodChannel(
     'kcb_pro_android/update',

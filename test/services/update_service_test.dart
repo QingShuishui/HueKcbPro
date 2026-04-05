@@ -1,13 +1,18 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:kcb_pro_android/core/network/api_base_url.dart';
 import 'package:kcb_pro_android/services/update_service.dart';
 
 void main() {
-  test('uses the new backend_v2 Android update endpoint', () {
+  test('uses the shared backend resolver for Android update metadata', () {
     final service = UpdateService();
 
     expect(
       service.updateMetadataUrl,
-      'http://127.0.0.1:8000/api/v1/app/update/android',
+      ApiBaseUrl.resolveAndroidUpdateMetadataUrl(
+        isAndroid: true,
+        isReleaseMode: false,
+        isProfileMode: false,
+      ),
     );
   });
 }
