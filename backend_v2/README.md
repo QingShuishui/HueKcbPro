@@ -1,6 +1,8 @@
 # backend_v2
 
-## Start
+Dockerized FastAPI backend for the HueKcbPro project.
+
+## Local Start
 
 ```bash
 docker compose up --build
@@ -43,3 +45,4 @@ Release deployment uses:
 - `.env.release`
 - one reusable application image for `migrate/api/worker/beat`
 - GitHub Release based publishing via `.github/workflows/backend-v2-docker.yml`
+- internal-only `postgres` and `redis` by default

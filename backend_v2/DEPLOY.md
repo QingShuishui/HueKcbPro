@@ -19,13 +19,19 @@ This repository includes a workflow at:
 
 It publishes the image to:
 
-- `ghcr.io/qsqs/kcb-backend-v2`
+- `ghcr.io/qingshuishui/kcb-backend-v2`
 
 Recommended release flow:
 
 1. Push your branch to GitHub
-2. Create a tag like `backend-v0.1.0`
+2. Create a tag like `backend-v0.1.1`
 3. Create a GitHub Release from that tag and publish it
+
+For server deployments, pin `APP_TAG` to the exact release tag you published, for example:
+
+- `backend-v0.1.1`
+
+Use `latest` only if you intentionally want to track the default branch image.
 
 The workflow will build and push a multi-arch image for:
 
@@ -37,11 +43,11 @@ The workflow will build and push a multi-arch image for:
 Build and push from the `backend_v2` directory:
 
 ```bash
-docker build -t ghcr.io/qsqs/kcb-backend-v2:latest .
-docker push ghcr.io/qsqs/kcb-backend-v2:latest
+docker build -t ghcr.io/qingshuishui/kcb-backend-v2:latest .
+docker push ghcr.io/qingshuishui/kcb-backend-v2:latest
 ```
 
-You can replace `latest` with a version tag such as `v0.1.0`.
+You can replace `latest` with a release tag such as `backend-v0.1.1`.
 
 ## 2. Prepare server files
 
@@ -71,6 +77,13 @@ For the default compose layout, `DATABASE_URL` should point to the `postgres` se
 DATABASE_URL=postgresql+psycopg://postgres:your-password@postgres:5432/kcb
 ```
 
+Recommended release defaults:
+
+```env
+APP_IMAGE=ghcr.io/qingshuishui/kcb-backend-v2
+APP_TAG=backend-v0.1.1
+```
+
 ## 3. Start the full stack
 
 ```bash
@@ -85,6 +98,8 @@ This starts:
 - FastAPI API
 - Celery worker
 - Celery beat
+
+Only the API service is exposed to the host by default. `postgres` and `redis` stay on the internal Docker network unless you explicitly add host port mappings.
 
 ## 4. Verify
 

@@ -1,17 +1,35 @@
-# kcb_pro_android
+# HueKcbPro
 
-Better Timatable!
+HueKcbPro is a school timetable project with a Flutter client and a Dockerized FastAPI backend.
 
-## Getting Started
+## Structure
 
-This project is a starting point for a Flutter application.
+- `lib/`: Flutter app source
+- `backend_v2/`: current FastAPI backend, Docker files, deployment docs
+- `backend/`: earlier backend implementation kept in the repo
 
-A few resources to get you started if this is your first Flutter project:
+## Local Development
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+Flutter app:
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+```bash
+flutter pub get
+flutter run
+```
+
+Backend:
+
+```bash
+cd backend_v2
+docker compose up --build
+```
+
+## Deployment
+
+Production deployment for the current backend is documented in [`backend_v2/DEPLOY.md`](./backend_v2/DEPLOY.md).
+
+The release image is published by GitHub Actions to:
+
+```text
+ghcr.io/qingshuishui/kcb-backend-v2
+```
