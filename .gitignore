@@ -57,3 +57,4 @@ app.*.map.json
 .superpowers/
 **/.superpowers/
 .pytest_cache/
+.worktrees/
