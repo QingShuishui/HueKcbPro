@@ -88,7 +88,7 @@ jobs:
           ssh ${SSH_OPTS} -p "${{ secrets.DEPLOY_PORT }}" "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" \
             "mkdir -p '${{ secrets.DEPLOY_BASE_PATH }}/downloads' '${{ secrets.DEPLOY_BASE_PATH }}/storage'"
 
-      - name: Upload APK to fallback server
+      - name: Upload APK to server
         run: |
           scp ${SSH_OPTS} -P "${{ secrets.DEPLOY_PORT }}" \
             "HueKcbPro-${{ inputs.version }}+${{ inputs.build_number }}.apk" \
