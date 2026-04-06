@@ -91,20 +91,31 @@ class UpdateService {
   }
 
   Future<File> _downloadApk(UpdateInfo updateInfo) async {
-    final uri = Uri.parse(updateInfo.apkUrl);
-    final request = await _httpClient.getUrl(uri);
-    final response = await request.close();
-    if (response.statusCode != HttpStatus.ok) {
-      throw UpdateServiceException('下载更新失败');
+    Future<File> downloadFromUrl(String url) async {
+      final uri = Uri.parse(url);
+      final request = await _httpClient.getUrl(uri);
+      final response = await request.close();
+      if (response.statusCode != HttpStatus.ok) {
+        throw UpdateServiceException('下载更新失败');
+      }
+
+      final directory = await getTemporaryDirectory();
+      final file = File(
+        '${directory.path}/kcb-update-${updateInfo.version}+${updateInfo.buildNumber}.apk',
+      );
+      final output = file.openWrite();
+      await response.forEach(output.add);
+      await output.close();
+      return file;
     }
 
-    final directory = await getTemporaryDirectory();
-    final file = File(
-      '${directory.path}/kcb-update-${updateInfo.version}+${updateInfo.buildNumber}.apk',
-    );
-    final output = file.openWrite();
-    await response.forEach(output.add);
-    await output.close();
-    return file;
+    try {
+      return await downloadFromUrl(updateInfo.primaryApkUrl);
+    } catch (_) {
+      if (updateInfo.fallbackApkUrl.isEmpty) {
+        rethrow;
+      }
+      return downloadFromUrl(updateInfo.fallbackApkUrl);
+    }
   }
 }

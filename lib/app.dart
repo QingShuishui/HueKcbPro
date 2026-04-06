@@ -33,7 +33,7 @@ class _KcbAppState extends ConsumerState<KcbApp> {
     final authState = ref.watch(authControllerProvider);
 
     return MaterialApp(
-      title: '课表',
+      title: 'HUE课程表Pro',
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
           seedColor: const Color(0xFFF472B6),

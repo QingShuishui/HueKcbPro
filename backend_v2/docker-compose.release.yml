@@ -23,6 +23,9 @@ services:
         condition: service_healthy
     ports:
       - "${API_PORT:-8000}:8000"
+    volumes:
+      - ${DEPLOY_BASE_PATH:-/opt/huekcb/releases}/downloads:/app/downloads
+      - ${DEPLOY_BASE_PATH:-/opt/huekcb/releases}/storage:/app/storage
     restart: unless-stopped
 
   worker:

@@ -1,0 +1,122 @@
+name: android-release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "App version, e.g. 1.0.2"
+        required: true
+      build_number:
+        description: "Android build number, e.g. 12"
+        required: true
+      notes:
+        description: "Release notes"
+        required: false
+      force_update:
+        description: "Force update"
+        required: false
+        default: "false"
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.35.7"
+          channel: stable
+
+      - name: Flutter pub get
+        run: flutter pub get
+
+      - name: Build release APK
+        run: |
+          flutter build apk --release \
+            --build-name="${{ inputs.version }}" \
+            --build-number="${{ inputs.build_number }}"
+
+      - name: Rename APK artifact
+        run: |
+          cp build/app/outputs/flutter-apk/app-release.apk "HueKcbPro-${{ inputs.version }}+${{ inputs.build_number }}.apk"
+
+      - name: Compute SHA256
+        id: sha
+        run: |
+          sha256sum "HueKcbPro-${{ inputs.version }}+${{ inputs.build_number }}.apk" | awk '{print $1}' > sha256.txt
+          echo "sha256=$(cat sha256.txt)" >> "$GITHUB_OUTPUT"
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release view "app-v${{ inputs.version }}" >/dev/null 2>&1 || \
+          gh release create "app-v${{ inputs.version }}" \
+            --title "app-v${{ inputs.version }}" \
+            --notes "${{ inputs.notes }}"
+
+      - name: Upload APK to GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "app-v${{ inputs.version }}" \
+            "HueKcbPro-${{ inputs.version }}+${{ inputs.build_number }}.apk" \
+            --clobber
+
+      - name: Start SSH agent
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.DEPLOY_SSH_KEY }}
+
+      - name: Prepare known hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -p "${{ secrets.DEPLOY_PORT }}" "${{ secrets.DEPLOY_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Ensure release directories exist
+        run: |
+          ssh -p "${{ secrets.DEPLOY_PORT }}" "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" \
+            "mkdir -p '${{ secrets.DEPLOY_BASE_PATH }}/downloads' '${{ secrets.DEPLOY_BASE_PATH }}/storage'"
+
+      - name: Upload APK to fallback server
+        run: |
+          scp -P "${{ secrets.DEPLOY_PORT }}" \
+            "HueKcbPro-${{ inputs.version }}+${{ inputs.build_number }}.apk" \
+            "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:${{ secrets.DEPLOY_BASE_PATH }}/downloads/HueKcbPro-${{ inputs.version }}+${{ inputs.build_number }}.apk"
+
+      - name: Write latest update metadata on server
+        shell: bash
+        env:
+          PRIMARY_URL: ${{ secrets.PUBLIC_BASE_URL }}/api/v1/app/update/downloads/HueKcbPro-${{ inputs.version }}+${{ inputs.build_number }}.apk
+          FALLBACK_URL: https://github.com/${{ github.repository }}/releases/download/app-v${{ inputs.version }}/HueKcbPro-${{ inputs.version }}+${{ inputs.build_number }}.apk
+        run: |
+          notes_json=$(python3 - <<'PY'
+          import json
+          print(json.dumps("""${{ inputs.notes }}"""))
+          PY
+          )
+          ssh -p "${{ secrets.DEPLOY_PORT }}" "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" "\
+            cat > '${{ secrets.DEPLOY_BASE_PATH }}/storage/latest-android.json' <<'EOF'\n\
+          {\n\
+            \"platform\": \"android\",\n\
+            \"version\": \"${{ inputs.version }}\",\n\
+            \"build_number\": ${{ inputs.build_number }},\n\
+            \"force_update\": ${{ inputs.force_update }},\n\
+            \"notes\": ${notes_json},\n\
+            \"primary_apk_url\": \"${PRIMARY_URL}\",\n\
+            \"fallback_apk_url\": \"${FALLBACK_URL}\",\n\
+            \"sha256\": \"${{ steps.sha.outputs.sha256 }}\",\n\
+            \"published_at\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"\n\
+          }\n\
+          EOF"

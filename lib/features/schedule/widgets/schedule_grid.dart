@@ -13,11 +13,26 @@ const _scheduleWeekdayShortLabels = [
   'SAT',
   'SUN',
 ];
+const _courseDisplayNameAliases = {
+  '毛泽东思想和中国特色社会主义理论体系概论': '毛概',
+  '习近平新时代中国特色社会主义思想概论': '习思想',
+};
+
+String _displayCourseName(String name) {
+  return _courseDisplayNameAliases[name] ?? name;
+}
 
 class ScheduleGrid extends StatelessWidget {
-  const ScheduleGrid({super.key, required this.schedule});
+  const ScheduleGrid({
+    super.key,
+    required this.schedule,
+    required this.weekStartDate,
+    this.borderRadius = 0,
+  });
 
   final Schedule schedule;
+  final DateTime weekStartDate;
+  final double borderRadius;
 
   static const _lessonLabels = [
     '1-2节',
@@ -27,6 +42,15 @@ class ScheduleGrid extends StatelessWidget {
     '9-10节',
     '11-12节',
   ];
+  static const _lessonTimeRanges = [
+    '08:00-09:40',
+    '10:00-11:40',
+    '14:00-15:40',
+    '16:00-17:40',
+    '18:30-20:10',
+    '20:20-21:05',
+  ];
+  static const _lessonPeriods = ['上午', '上午', '下午', '下午', '晚上', '晚上'];
 
   Color _cardColor(int index) {
     const palette = [
@@ -51,10 +75,11 @@ class ScheduleGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final radius = BorderRadius.circular(borderRadius);
     return DecoratedBox(
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.9),
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: radius,
         boxShadow: const [
           BoxShadow(
             color: Color(0x14000000),
@@ -64,7 +89,7 @@ class ScheduleGrid extends StatelessWidget {
         ],
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: radius,
         child: LayoutBuilder(
           builder: (context, constraints) {
             final metrics = _ResponsiveScheduleMetrics.fromConstraints(
@@ -74,7 +99,7 @@ class ScheduleGrid extends StatelessWidget {
 
             return Column(
               children: [
-                _HeaderRow(metrics: metrics),
+                _HeaderRow(metrics: metrics, weekStartDate: weekStartDate),
                 for (
                   var rowIndex = 0;
                   rowIndex < _lessonLabels.length;
@@ -86,6 +111,8 @@ class ScheduleGrid extends StatelessWidget {
                       children: [
                         _TimeCell(
                           label: _lessonLabels[rowIndex],
+                          periodLabel: _lessonPeriods[rowIndex],
+                          timeRange: _lessonTimeRanges[rowIndex],
                           metrics: metrics,
                         ),
                         for (var weekday = 1; weekday <= 7; weekday++)
@@ -143,13 +170,21 @@ class _HeaderCell extends StatelessWidget {
 }
 
 class _TimeCell extends StatelessWidget {
-  const _TimeCell({required this.label, required this.metrics});
+  const _TimeCell({
+    required this.label,
+    required this.periodLabel,
+    required this.timeRange,
+    required this.metrics,
+  });
 
   final String label;
+  final String periodLabel;
+  final String timeRange;
   final _ResponsiveScheduleMetrics metrics;
 
   @override
   Widget build(BuildContext context) {
+    final rangeParts = timeRange.split('-');
     return Container(
       width: metrics.timeColumnWidth,
       constraints: BoxConstraints(minHeight: metrics.minCellHeight),
@@ -165,17 +200,42 @@ class _TimeCell extends StatelessWidget {
           bottom: BorderSide(color: Color(0xFFF3E5F5), width: 0.8),
         ),
       ),
-      child: Center(
-        child: Text(
-          label,
-          textAlign: TextAlign.center,
-          style: Theme.of(context).textTheme.labelLarge?.copyWith(
-            fontWeight: FontWeight.w700,
-            color: const Color(0xFF9CA3AF),
-            fontSize: metrics.timeFontSize,
-            height: 1.15,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(
+            label,
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.labelLarge?.copyWith(
+              fontWeight: FontWeight.w700,
+              color: const Color(0xFF9CA3AF),
+              fontSize: metrics.timeFontSize,
+              height: 1.15,
+            ),
           ),
-        ),
+          SizedBox(height: metrics.detailGap),
+          Text(
+            periodLabel,
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: const Color(0xFF9CA3AF),
+              fontWeight: FontWeight.w700,
+              fontSize: metrics.courseDetailSize,
+              height: 1.05,
+            ),
+          ),
+          SizedBox(height: metrics.detailGap),
+          Text(
+            rangeParts.join('\n'),
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: const Color(0xFF9CA3AF),
+              fontWeight: FontWeight.w600,
+              fontSize: metrics.courseDetailSize,
+              height: 1.05,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -216,7 +276,9 @@ class _CourseCell extends StatelessWidget {
       );
     }
 
-    final combinedNames = courses.map((course) => course.name).join(' / ');
+    final combinedNames = courses
+        .map((course) => _displayCourseName(course.name))
+        .join(' / ');
     final combinedCodes = courses
         .map((course) => course.code)
         .where((code) => code.isNotEmpty)
@@ -317,9 +379,10 @@ class _CourseCell extends StatelessWidget {
 }
 
 class _HeaderRow extends StatelessWidget {
-  const _HeaderRow({required this.metrics});
+  const _HeaderRow({required this.metrics, required this.weekStartDate});
 
   final _ResponsiveScheduleMetrics metrics;
+  final DateTime weekStartDate;
 
   @override
   Widget build(BuildContext context) {
@@ -366,6 +429,17 @@ class _HeaderRow extends StatelessWidget {
                       color: const Color(0xFF4B5563),
                       fontSize: metrics.headerTitleSize,
                       height: 1.05,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '${weekStartDate.add(Duration(days: index)).month}/${weekStartDate.add(Duration(days: index)).day}',
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: const Color(0xFF9CA3AF),
+                      fontWeight: FontWeight.w700,
+                      fontSize: metrics.headerMetaSize,
+                      height: 1,
                     ),
                   ),
                 ],

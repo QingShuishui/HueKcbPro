@@ -9,32 +9,29 @@ import 'package:kcb_pro_android/features/auth/repositories/auth_repository.dart'
 void main() {
   testWidgets('shows HUE课程表Pro branding', (tester) async {
     await tester.pumpWidget(
-      const ProviderScope(
-        child: MaterialApp(home: LoginPage()),
-      ),
+      const ProviderScope(child: MaterialApp(home: LoginPage())),
     );
 
     expect(find.text('HUE课程表Pro'), findsOneWidget);
     expect(find.text('湖北第二师范学院课表'), findsOneWidget);
+    expect(find.text('Tip :) 密码默认为您的出生日期'), findsOneWidget);
   });
 
-  testWidgets('shows validation message when fields are empty', (
-    tester,
-  ) async {
+  testWidgets('shows validation message when fields are empty', (tester) async {
     await tester.pumpWidget(
-      const ProviderScope(
-        child: MaterialApp(home: LoginPage()),
-      ),
+      const ProviderScope(child: MaterialApp(home: LoginPage())),
     );
 
     await tester.tap(find.text('登录'));
     await tester.pump();
 
     expect(find.text('请输入学号'), findsOneWidget);
-    expect(find.text('请输入密码'), findsOneWidget);
+    expect(find.text('请输入密码，默认为您的出生日期，例如：demo_password'), findsOneWidget);
   });
 
-  testWidgets('shows login error message when repository throws', (tester) async {
+  testWidgets('shows login error message when repository throws', (
+    tester,
+  ) async {
     final container = ProviderContainer(
       overrides: [
         authRepositoryProvider.overrideWithValue(_ThrowingAuthRepository()),

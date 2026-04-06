@@ -5,7 +5,8 @@ class UpdateInfo {
     required this.buildNumber,
     required this.forceUpdate,
     required this.notes,
-    required this.apkUrl,
+    required this.primaryApkUrl,
+    required this.fallbackApkUrl,
     required this.sha256,
     required this.publishedAt,
   });
@@ -15,7 +16,8 @@ class UpdateInfo {
   final int buildNumber;
   final bool forceUpdate;
   final String notes;
-  final String apkUrl;
+  final String primaryApkUrl;
+  final String fallbackApkUrl;
   final String sha256;
   final DateTime publishedAt;
 
@@ -26,10 +28,15 @@ class UpdateInfo {
       buildNumber: (json['build_number'] as num).toInt(),
       forceUpdate: json['force_update'] as bool? ?? false,
       notes: json['notes'] as String? ?? '',
-      apkUrl: json['apk_url'] as String,
+      primaryApkUrl: json['primary_apk_url'] as String? ?? '',
+      fallbackApkUrl: json['fallback_apk_url'] as String? ?? '',
       sha256: json['sha256'] as String,
       publishedAt: DateTime.parse(json['published_at'] as String),
     );
+  }
+
+  String get effectiveApkUrl {
+    return primaryApkUrl.isNotEmpty ? primaryApkUrl : fallbackApkUrl;
   }
 
   bool isNewerThan({required int localBuildNumber}) {

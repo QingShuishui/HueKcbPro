@@ -9,13 +9,15 @@ void main() {
       'build_number': 2,
       'force_update': false,
       'notes': 'Bug fixes',
-      'apk_url': 'http://localhost/downloads/app.apk',
+      'primary_apk_url': 'https://github.com/example/app.apk',
+      'fallback_apk_url': 'http://localhost/downloads/app.apk',
       'sha256': 'abc',
       'published_at': '2026-04-01T10:00:00Z',
     });
 
     expect(info.buildNumber, 2);
-    expect(info.apkUrl, 'http://localhost/downloads/app.apk');
+    expect(info.primaryApkUrl, 'https://github.com/example/app.apk');
+    expect(info.fallbackApkUrl, 'http://localhost/downloads/app.apk');
     expect(info.notes, 'Bug fixes');
   });
 
@@ -26,12 +28,41 @@ void main() {
       buildNumber: 2,
       forceUpdate: false,
       notes: 'Bug fixes',
-      apkUrl: 'http://localhost/downloads/app.apk',
+      primaryApkUrl: 'https://github.com/example/app.apk',
+      fallbackApkUrl: 'http://localhost/downloads/app.apk',
       sha256: 'abc',
       publishedAt: DateTime.parse('2026-04-01T10:00:00Z'),
     );
 
     expect(info.isNewerThan(localBuildNumber: 1), isTrue);
     expect(info.isNewerThan(localBuildNumber: 2), isFalse);
+  });
+
+  test('prefers primary apk url and falls back when primary is empty', () {
+    final withPrimary = UpdateInfo.fromJson({
+      'platform': 'android',
+      'version': '1.0.1',
+      'build_number': 2,
+      'force_update': false,
+      'notes': '',
+      'primary_apk_url': 'https://github.com/example/app.apk',
+      'fallback_apk_url': 'http://localhost/downloads/app.apk',
+      'sha256': 'abc',
+      'published_at': '2026-04-01T10:00:00Z',
+    });
+    final withoutPrimary = UpdateInfo.fromJson({
+      'platform': 'android',
+      'version': '1.0.1',
+      'build_number': 2,
+      'force_update': false,
+      'notes': '',
+      'primary_apk_url': '',
+      'fallback_apk_url': 'http://localhost/downloads/app.apk',
+      'sha256': 'abc',
+      'published_at': '2026-04-01T10:00:00Z',
+    });
+
+    expect(withPrimary.effectiveApkUrl, 'https://github.com/example/app.apk');
+    expect(withoutPrimary.effectiveApkUrl, 'http://localhost/downloads/app.apk');
   });
 }

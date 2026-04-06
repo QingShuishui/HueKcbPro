@@ -32,10 +32,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [
-              Color(0xFFFFF1F7),
-              Color(0xFFFDFBF7),
-            ],
+            colors: [Color(0xFFFFF1F7), Color(0xFFFDFBF7)],
           ),
         ),
         child: SafeArea(
@@ -65,32 +62,36 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                         children: [
                           Text(
                             'HUE课程表Pro',
-                            style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                              fontWeight: FontWeight.w900,
-                              color: const Color(0xFFF472B6),
-                            ),
+                            style: Theme.of(context).textTheme.headlineMedium
+                                ?.copyWith(
+                                  fontWeight: FontWeight.w900,
+                                  color: const Color(0xFFF472B6),
+                                ),
                           ),
                           const SizedBox(height: 8),
                           Text(
                             '湖北第二师范学院课表',
-                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.w700,
-                              color: const Color(0xFF6B7280),
-                            ),
+                            style: Theme.of(context).textTheme.titleMedium
+                                ?.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                  color: const Color(0xFF6B7280),
+                                ),
                           ),
                           const SizedBox(height: 12),
                           Text(
-                            '登录后可查看课表、自动恢复会话，并在本地保存登录状态。',
-                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              color: const Color(0xFF9CA3AF),
-                              height: 1.45,
-                            ),
+                            '登录后可实时查看课表，获取教务系统最新课表。',
+                            style: Theme.of(context).textTheme.bodyMedium
+                                ?.copyWith(
+                                  color: const Color(0xFF9CA3AF),
+                                  height: 1.45,
+                                ),
                           ),
                           const SizedBox(height: 28),
                           TextFormField(
                             controller: _usernameController,
                             decoration: const InputDecoration(labelText: '学号'),
-                            validator: (value) => (value == null || value.isEmpty)
+                            validator: (value) =>
+                                (value == null || value.isEmpty)
                                 ? '请输入学号'
                                 : null,
                           ),
@@ -99,9 +100,19 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                             controller: _passwordController,
                             obscureText: true,
                             decoration: const InputDecoration(labelText: '密码'),
-                            validator: (value) => (value == null || value.isEmpty)
-                                ? '请输入密码'
+                            validator: (value) =>
+                                (value == null || value.isEmpty)
+                                ? '请输入密码，默认为您的出生日期，例如：demo_password'
                                 : null,
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Tip :) 密码默认为您的出生日期',
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(
+                                  color: const Color(0xFFFB7185),
+                                  fontWeight: FontWeight.w600,
+                                ),
                           ),
                           if (authState.errorMessage != null) ...[
                             const SizedBox(height: 16),
@@ -120,14 +131,18 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                               onPressed: authState.status == AuthStatus.loading
                                   ? null
                                   : () async {
-                                      if (!(_formKey.currentState?.validate() ?? false)) {
+                                      if (!(_formKey.currentState?.validate() ??
+                                          false)) {
                                         return;
                                       }
 
-                                      await ref.read(authControllerProvider.notifier).login(
-                                        academicUsername: _usernameController.text,
-                                        password: _passwordController.text,
-                                      );
+                                      await ref
+                                          .read(authControllerProvider.notifier)
+                                          .login(
+                                            academicUsername:
+                                                _usernameController.text,
+                                            password: _passwordController.text,
+                                          );
                                     },
                               child: Text(
                                 authState.status == AuthStatus.loading

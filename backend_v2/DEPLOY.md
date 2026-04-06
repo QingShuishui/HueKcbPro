@@ -67,6 +67,7 @@ Required edits:
 - `APP_IMAGE`
 - `APP_TAG`
 - `POSTGRES_PASSWORD`
+- `DEPLOY_BASE_PATH`
 - `DATABASE_URL`
 - `JWT_SECRET`
 - `CREDENTIAL_ENCRYPTION_KEY`
@@ -82,7 +83,13 @@ Recommended release defaults:
 ```env
 APP_IMAGE=ghcr.io/qingshuishui/kcb-backend-v2
 APP_TAG=backend-v0.1.1
+DEPLOY_BASE_PATH=/opt/huekcb/releases
 ```
+
+Recommended host directories:
+
+- `${DEPLOY_BASE_PATH}/downloads`
+- `${DEPLOY_BASE_PATH}/storage`
 
 ## 3. Start the full stack
 
@@ -100,6 +107,11 @@ This starts:
 - Celery beat
 
 Only the API service is exposed to the host by default. `postgres` and `redis` stay on the internal Docker network unless you explicitly add host port mappings.
+
+The API container mounts:
+
+- `${DEPLOY_BASE_PATH}/downloads` -> `/app/downloads`
+- `${DEPLOY_BASE_PATH}/storage` -> `/app/storage`
 
 ## 4. Verify
 
@@ -130,3 +142,28 @@ docker compose --env-file .env.release -f docker-compose.release.yml up -d
   - `redis_data`
 - Put Nginx or Caddy in front of `api` if you want HTTPS and domain routing.
 - If you use GHCR, make sure the package visibility is set appropriately for your deployment target.
+
+## Android app publish workflow
+
+The repository includes:
+
+- `.github/workflows/android-release.yml`
+
+Required GitHub Secrets:
+
+- `DEPLOY_HOST`
+- `DEPLOY_PORT`
+- `DEPLOY_USER`
+- `DEPLOY_SSH_KEY`
+- `DEPLOY_BASE_PATH`
+- `PUBLIC_BASE_URL`
+
+Publish flow:
+
+1. Build release APK in GitHub Actions
+2. Upload APK to a GitHub Release
+3. SCP the same APK to `${DEPLOY_BASE_PATH}/downloads`
+4. Rewrite `${DEPLOY_BASE_PATH}/storage/latest-android.json`
+5. `backend_v2` returns:
+   - `primary_apk_url` from GitHub Release
+   - `fallback_apk_url` from your server
