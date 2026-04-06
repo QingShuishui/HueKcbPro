@@ -1,25 +1,47 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../auth/controllers/auth_controller.dart';
+import '../../updates/update_prompt.dart';
+import '../../updates/update_providers.dart';
 import '../../../services/update_service.dart';
 import 'about_page.dart';
 
-final updateServiceProvider = Provider<UpdateService>((ref) {
-  return UpdateService();
-});
-
-class SettingsPage extends ConsumerWidget {
-  const SettingsPage({super.key, required this.academicUsername});
+class SettingsPage extends ConsumerStatefulWidget {
+  const SettingsPage({
+    super.key,
+    required this.academicUsername,
+    this.appVersionLabel,
+  });
 
   final String academicUsername;
+  final String? appVersionLabel;
   static final Uri _githubUri = Uri.parse(
     'https://github.com/QingShuishui/HueKcbPro',
   );
 
-  Future<void> _checkForUpdates(BuildContext context, WidgetRef ref) async {
+  @override
+  ConsumerState<SettingsPage> createState() => _SettingsPageState();
+}
+
+class _SettingsPageState extends ConsumerState<SettingsPage> {
+  late final Future<String?> _appVersionFuture = widget.appVersionLabel == null
+      ? _loadAppVersion()
+      : Future<String?>.value(widget.appVersionLabel);
+
+  Future<String?> _loadAppVersion() async {
+    final info = await PackageInfo.fromPlatform();
+    final build = info.buildNumber.trim();
+    if (build.isEmpty) {
+      return info.version;
+    }
+    return '${info.version}+$build';
+  }
+
+  Future<void> _checkForUpdates(BuildContext context) async {
     final updateService = ref.read(updateServiceProvider);
     try {
       final updateInfo = await updateService.getAvailableUpdate();
@@ -42,21 +64,10 @@ class SettingsPage extends ConsumerWidget {
         );
         return;
       }
-
-      await showDialog<void>(
+      await showUpdateDialog(
         context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('发现新版本'),
-          content: Text(
-            '版本 ${updateInfo.version}（构建 ${updateInfo.buildNumber}）\n\n${updateInfo.notes.isEmpty ? '已有新版本可用。' : updateInfo.notes}',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('稍后再说'),
-            ),
-          ],
-        ),
+        updateInfo: updateInfo,
+        updateService: updateService,
       );
     } on UpdateServiceException catch (error) {
       if (!context.mounted) {
@@ -69,7 +80,7 @@ class SettingsPage extends ConsumerWidget {
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('设置')),
       body: Container(
@@ -91,7 +102,7 @@ class SettingsPage extends ConsumerWidget {
                   const Text('当前学号'),
                   const SizedBox(height: 8),
                   Text(
-                    academicUsername,
+                    widget.academicUsername,
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.w800,
                     ),
@@ -113,23 +124,29 @@ class SettingsPage extends ConsumerWidget {
               title: '项目',
               child: Column(
                 children: [
-                  _ActionTile(
-                    leading: Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFFF1F2),
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      alignment: Alignment.center,
-                      child: const Icon(
-                        Icons.system_update_alt_rounded,
-                        color: Color(0xFFBE185D),
-                      ),
-                    ),
-                    title: '检查更新',
-                    subtitle: '看看当前有没有新的版本可用',
-                    onTap: () => _checkForUpdates(context, ref),
+                  FutureBuilder<String?>(
+                    future: _appVersionFuture,
+                    builder: (context, snapshot) {
+                      final versionLabel = snapshot.data ?? '读取中...';
+                      return _ActionTile(
+                        leading: Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFFF1F2),
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          alignment: Alignment.center,
+                          child: const Icon(
+                            Icons.system_update_alt_rounded,
+                            color: Color(0xFFBE185D),
+                          ),
+                        ),
+                        title: '检查更新',
+                        subtitle: '当前版本：$versionLabel',
+                        onTap: () => _checkForUpdates(context),
+                      );
+                    },
                   ),
                   const SizedBox(height: 10),
                   _ActionTile(
@@ -138,7 +155,7 @@ class SettingsPage extends ConsumerWidget {
                     subtitle: '帮帮忙点下Star～感谢啦🙏',
                     onTap: () async {
                       final launched = await launchUrl(
-                        _githubUri,
+                        SettingsPage._githubUri,
                         mode: LaunchMode.externalApplication,
                       );
                       if (!launched && context.mounted) {
@@ -182,9 +199,16 @@ class SettingsPage extends ConsumerWidget {
 }
 
 class _SectionCard extends StatelessWidget {
-  const _SectionCard({required this.title, required this.child});
+  const _SectionCard({
+    this.title,
+    this.titleFuture,
+    this.titleBuilder,
+    required this.child,
+  });
 
-  final String title;
+  final String? title;
+  final Future<String?>? titleFuture;
+  final String Function(String?)? titleBuilder;
   final Widget child;
 
   @override
@@ -206,13 +230,28 @@ class _SectionCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            title,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w900,
-              color: const Color(0xFF374151),
+          if (title != null)
+            Text(
+              title!,
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w900,
+                color: const Color(0xFF374151),
+              ),
+            )
+          else
+            FutureBuilder<String?>(
+              future: titleFuture,
+              builder: (context, snapshot) {
+                final resolved = titleBuilder?.call(snapshot.data) ?? '';
+                return Text(
+                  resolved,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w900,
+                    color: const Color(0xFF374151),
+                  ),
+                );
+              },
             ),
-          ),
           const SizedBox(height: 14),
           child,
         ],
