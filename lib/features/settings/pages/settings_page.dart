@@ -66,6 +66,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       }
       await showUpdateDialog(
         context: context,
+        ref: ref,
         updateInfo: updateInfo,
         updateService: updateService,
       );

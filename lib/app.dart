@@ -8,6 +8,7 @@ import 'features/auth/pages/login_page.dart';
 import 'features/schedule/pages/schedule_page.dart';
 import 'features/updates/update_prompt.dart';
 import 'features/updates/update_providers.dart';
+import 'services/update_service.dart';
 
 class KcbApp extends ConsumerStatefulWidget {
   const KcbApp({super.key});
@@ -28,6 +29,7 @@ class _KcbAppState extends ConsumerState<KcbApp> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(_lifecycleObserver);
     Future.microtask(() async {
       await ref.read(authControllerProvider.notifier).restoreSession();
       if (mounted) {
@@ -36,6 +38,18 @@ class _KcbAppState extends ConsumerState<KcbApp> {
         });
       }
     });
+  }
+
+  late final AppLifecycleListener _lifecycleObserver = AppLifecycleListener(
+    onResume: () {
+      unawaited(_maybeResumePendingInstall());
+    },
+  );
+
+  @override
+  void dispose() {
+    _lifecycleObserver.dispose();
+    super.dispose();
   }
 
   @override
@@ -117,11 +131,35 @@ class _KcbAppState extends ConsumerState<KcbApp> {
       _updatePromptShownThisSession = true;
       await showUpdateDialog(
         context: dialogContext,
+        ref: ref,
         updateInfo: updateInfo,
         updateService: updateService,
       );
     } finally {
       _checkingUpdate = false;
+    }
+  }
+
+  Future<void> _maybeResumePendingInstall() async {
+    final pending = ref.read(pendingUpdateInstallProvider);
+    final dialogContext = _navigatorKey.currentContext;
+    if (pending == null || dialogContext == null) {
+      return;
+    }
+    final updateService = ref.read(updateServiceProvider);
+    final canInstall = await updateService.canInstallPackages();
+    if (!canInstall) {
+      return;
+    }
+    ref.read(pendingUpdateInstallProvider.notifier).state = null;
+    try {
+      await updateService.installDownloadedApk(pending.apkPath);
+    } on UpdateServiceException catch (error) {
+      if (dialogContext.mounted) {
+        ScaffoldMessenger.of(
+          dialogContext,
+        ).showSnackBar(SnackBar(content: Text(error.message)));
+      }
     }
   }
 }

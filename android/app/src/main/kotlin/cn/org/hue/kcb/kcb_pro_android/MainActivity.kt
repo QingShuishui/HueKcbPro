@@ -19,7 +19,16 @@ class MainActivity : FlutterActivity() {
             "kcb_pro_android/update"
         ).setMethodCallHandler { call, result ->
             when (call.method) {
-                "installApk" -> {
+                "canInstallApk" -> {
+                    result.success(canInstallPackages())
+                }
+
+                "openInstallPermissionSettings" -> {
+                    openInstallPermissionSettings()
+                    result.success(null)
+                }
+
+                "installDownloadedApk", "installApk" -> {
                     val path = call.argument<String>("path")
                     if (path.isNullOrBlank()) {
                         result.error("invalid_args", "Missing APK path", null)
@@ -27,7 +36,7 @@ class MainActivity : FlutterActivity() {
                     }
 
                     runCatching {
-                        installApk(path)
+                        installDownloadedApk(path)
                     }.onSuccess {
                         result.success(null)
                     }.onFailure { error ->
@@ -40,17 +49,23 @@ class MainActivity : FlutterActivity() {
         }
     }
 
-    private fun installApk(path: String) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
-            !packageManager.canRequestPackageInstalls()
-        ) {
-            val intent = Intent(
-                Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
-                Uri.parse("package:$packageName")
-            ).apply {
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            }
-            startActivity(intent)
+    private fun canInstallPackages(): Boolean {
+        return Build.VERSION.SDK_INT < Build.VERSION_CODES.O ||
+            packageManager.canRequestPackageInstalls()
+    }
+
+    private fun openInstallPermissionSettings() {
+        val intent = Intent(
+            Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+            Uri.parse("package:$packageName")
+        ).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        startActivity(intent)
+    }
+
+    private fun installDownloadedApk(path: String) {
+        if (!canInstallPackages()) {
             throw IllegalStateException("请先允许安装未知来源应用")
         }
 

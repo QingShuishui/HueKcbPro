@@ -19,17 +19,13 @@ class UpdateServiceException implements Exception {
 }
 
 class UpdateService {
-  UpdateService({
-    HttpClient? httpClient,
-    String? updateMetadataUrl,
-  }) : updateMetadataUrl =
-           updateMetadataUrl ??
-           ApiBaseUrl.resolveAndroidUpdateMetadataUrl(isAndroid: true),
-       _httpClient = httpClient ?? HttpClient();
+  UpdateService({HttpClient? httpClient, String? updateMetadataUrl})
+    : updateMetadataUrl =
+          updateMetadataUrl ??
+          ApiBaseUrl.resolveAndroidUpdateMetadataUrl(isAndroid: true),
+      _httpClient = httpClient ?? HttpClient();
 
-  static const MethodChannel _channel = MethodChannel(
-    'kcb_pro_android/update',
-  );
+  static const MethodChannel _channel = MethodChannel('kcb_pro_android/update');
 
   final HttpClient _httpClient;
   final String updateMetadataUrl;
@@ -66,8 +62,31 @@ class UpdateService {
     return UpdateInfo.fromJson(jsonMap);
   }
 
+  Future<bool> canInstallPackages() async {
+    if (!Platform.isAndroid) {
+      return false;
+    }
+    final allowed = await _channel.invokeMethod<bool>('canInstallApk');
+    return allowed ?? false;
+  }
+
+  Future<void> openInstallPermissionSettings() async {
+    if (!Platform.isAndroid) {
+      return;
+    }
+    await _channel.invokeMethod<void>('openInstallPermissionSettings');
+  }
+
+  Future<void> installDownloadedApk(String path) async {
+    try {
+      await _channel.invokeMethod<void>('installDownloadedApk', {'path': path});
+    } on PlatformException catch (error) {
+      throw UpdateServiceException(error.message ?? '无法启动安装程序');
+    }
+  }
+
   Future<void> downloadAndInstall(UpdateInfo updateInfo) async {
-    final file = await _downloadApk(updateInfo);
+    final file = await downloadApk(updateInfo);
     final digest = await computeFileSha256(file);
     if (digest.toLowerCase() != updateInfo.sha256.toLowerCase()) {
       if (await file.exists()) {
@@ -76,13 +95,7 @@ class UpdateService {
       throw UpdateServiceException('APK 校验失败');
     }
 
-    try {
-      await _channel.invokeMethod<void>('installApk', {
-        'path': file.path,
-      });
-    } on PlatformException catch (error) {
-      throw UpdateServiceException(error.message ?? '无法启动安装程序');
-    }
+    await installDownloadedApk(file.path);
   }
 
   Future<String> computeFileSha256(File file) async {
@@ -90,7 +103,10 @@ class UpdateService {
     return digest.toString();
   }
 
-  Future<File> _downloadApk(UpdateInfo updateInfo) async {
+  Future<File> downloadApk(
+    UpdateInfo updateInfo, {
+    void Function(double progress)? onProgress,
+  }) async {
     Future<File> downloadFromUrl(String url) async {
       final uri = Uri.parse(url);
       final request = await _httpClient.getUrl(uri);
@@ -104,7 +120,15 @@ class UpdateService {
         '${directory.path}/kcb-update-${updateInfo.version}+${updateInfo.buildNumber}.apk',
       );
       final output = file.openWrite();
-      await response.forEach(output.add);
+      var received = 0;
+      final total = response.contentLength;
+      await for (final chunk in response) {
+        output.add(chunk);
+        received += chunk.length;
+        if (onProgress != null && total > 0) {
+          onProgress((received / total).clamp(0, 1));
+        }
+      }
       await output.close();
       return file;
     }
