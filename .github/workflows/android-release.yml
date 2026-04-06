@@ -94,28 +94,43 @@ jobs:
             "HueKcbPro-${{ inputs.version }}+${{ inputs.build_number }}.apk" \
             "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:${{ secrets.DEPLOY_BASE_PATH }}/downloads/HueKcbPro-${{ inputs.version }}+${{ inputs.build_number }}.apk"
 
-      - name: Write latest update metadata on server
+      - name: Generate latest update metadata
         shell: bash
         env:
           PRIMARY_URL: ${{ secrets.PUBLIC_BASE_URL }}/api/v1/app/update/downloads/HueKcbPro-${{ inputs.version }}+${{ inputs.build_number }}.apk
           FALLBACK_URL: https://github.com/${{ github.repository }}/releases/download/app-v${{ inputs.version }}/HueKcbPro-${{ inputs.version }}+${{ inputs.build_number }}.apk
         run: |
-          notes_json=$(python3 - <<'PY'
+          python3 - <<'PY'
           import json
-          print(json.dumps("""${{ inputs.notes }}"""))
+          import os
+          from datetime import datetime, timezone
+
+          payload = {
+              "platform": "android",
+              "version": os.environ["INPUT_VERSION"],
+              "build_number": int(os.environ["INPUT_BUILD_NUMBER"]),
+              "force_update": os.environ["INPUT_FORCE_UPDATE"].lower() == "true",
+              "notes": os.environ.get("INPUT_NOTES", ""),
+              "primary_apk_url": os.environ["PRIMARY_URL"],
+              "fallback_apk_url": os.environ["FALLBACK_URL"],
+              "sha256": os.environ["APK_SHA256"],
+              "published_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+          }
+
+          with open("latest-android.json", "w", encoding="utf-8") as fh:
+              json.dump(payload, fh, ensure_ascii=False, indent=2)
           PY
-          )
-          ssh ${SSH_OPTS} -p "${{ secrets.DEPLOY_PORT }}" "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" "\
-            cat > '${{ secrets.DEPLOY_BASE_PATH }}/storage/latest-android.json' <<'EOF'\n\
-          {\n\
-            \"platform\": \"android\",\n\
-            \"version\": \"${{ inputs.version }}\",\n\
-            \"build_number\": ${{ inputs.build_number }},\n\
-            \"force_update\": ${{ inputs.force_update }},\n\
-            \"notes\": ${notes_json},\n\
-            \"primary_apk_url\": \"${PRIMARY_URL}\",\n\
-            \"fallback_apk_url\": \"${FALLBACK_URL}\",\n\
-            \"sha256\": \"${{ steps.sha.outputs.sha256 }}\",\n\
-            \"published_at\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"\n\
-          }\n\
-          EOF"
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+          INPUT_BUILD_NUMBER: ${{ inputs.build_number }}
+          INPUT_FORCE_UPDATE: ${{ inputs.force_update }}
+          INPUT_NOTES: ${{ inputs.notes }}
+          APK_SHA256: ${{ steps.sha.outputs.sha256 }}
+          PRIMARY_URL: ${{ secrets.PUBLIC_BASE_URL }}/api/v1/app/update/downloads/HueKcbPro-${{ inputs.version }}+${{ inputs.build_number }}.apk
+          FALLBACK_URL: https://github.com/${{ github.repository }}/releases/download/app-v${{ inputs.version }}/HueKcbPro-${{ inputs.version }}+${{ inputs.build_number }}.apk
+
+      - name: Upload latest update metadata to server
+        run: |
+          scp ${SSH_OPTS} -P "${{ secrets.DEPLOY_PORT }}" \
+            "latest-android.json" \
+            "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:${{ secrets.DEPLOY_BASE_PATH }}/storage/latest-android.json"
