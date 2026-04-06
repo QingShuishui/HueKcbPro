@@ -97,6 +97,11 @@ jobs:
       - name: Generate latest update metadata
         shell: bash
         env:
+          INPUT_VERSION: ${{ inputs.version }}
+          INPUT_BUILD_NUMBER: ${{ inputs.build_number }}
+          INPUT_FORCE_UPDATE: ${{ inputs.force_update }}
+          INPUT_NOTES: ${{ inputs.notes }}
+          APK_SHA256: ${{ steps.sha.outputs.sha256 }}
           PRIMARY_URL: ${{ secrets.PUBLIC_BASE_URL }}/api/v1/app/update/downloads/HueKcbPro-${{ inputs.version }}+${{ inputs.build_number }}.apk
           FALLBACK_URL: https://github.com/${{ github.repository }}/releases/download/app-v${{ inputs.version }}/HueKcbPro-${{ inputs.version }}+${{ inputs.build_number }}.apk
         run: |
@@ -120,14 +125,6 @@ jobs:
           with open("latest-android.json", "w", encoding="utf-8") as fh:
               json.dump(payload, fh, ensure_ascii=False, indent=2)
           PY
-        env:
-          INPUT_VERSION: ${{ inputs.version }}
-          INPUT_BUILD_NUMBER: ${{ inputs.build_number }}
-          INPUT_FORCE_UPDATE: ${{ inputs.force_update }}
-          INPUT_NOTES: ${{ inputs.notes }}
-          APK_SHA256: ${{ steps.sha.outputs.sha256 }}
-          PRIMARY_URL: ${{ secrets.PUBLIC_BASE_URL }}/api/v1/app/update/downloads/HueKcbPro-${{ inputs.version }}+${{ inputs.build_number }}.apk
-          FALLBACK_URL: https://github.com/${{ github.repository }}/releases/download/app-v${{ inputs.version }}/HueKcbPro-${{ inputs.version }}+${{ inputs.build_number }}.apk
 
       - name: Upload latest update metadata to server
         run: |
