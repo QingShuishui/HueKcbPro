@@ -45,6 +45,7 @@ app.*.map.json
 /android/app/release
 /android/.kotlin
 /android/signing/
+/pictures/
 
 # Local environment and runtime data
 .env
