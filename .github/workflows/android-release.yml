@@ -79,19 +79,18 @@ jobs:
         with:
           ssh-private-key: ${{ secrets.DEPLOY_SSH_KEY }}
 
-      - name: Prepare known hosts
+      - name: Configure SSH options
         run: |
-          mkdir -p ~/.ssh
-          ssh-keyscan -p "${{ secrets.DEPLOY_PORT }}" "${{ secrets.DEPLOY_HOST }}" >> ~/.ssh/known_hosts
+          echo "SSH_OPTS=-o StrictHostKeyChecking=accept-new" >> "$GITHUB_ENV"
 
       - name: Ensure release directories exist
         run: |
-          ssh -p "${{ secrets.DEPLOY_PORT }}" "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" \
+          ssh ${SSH_OPTS} -p "${{ secrets.DEPLOY_PORT }}" "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" \
             "mkdir -p '${{ secrets.DEPLOY_BASE_PATH }}/downloads' '${{ secrets.DEPLOY_BASE_PATH }}/storage'"
 
       - name: Upload APK to fallback server
         run: |
-          scp -P "${{ secrets.DEPLOY_PORT }}" \
+          scp ${SSH_OPTS} -P "${{ secrets.DEPLOY_PORT }}" \
             "HueKcbPro-${{ inputs.version }}+${{ inputs.build_number }}.apk" \
             "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:${{ secrets.DEPLOY_BASE_PATH }}/downloads/HueKcbPro-${{ inputs.version }}+${{ inputs.build_number }}.apk"
 
@@ -106,7 +105,7 @@ jobs:
           print(json.dumps("""${{ inputs.notes }}"""))
           PY
           )
-          ssh -p "${{ secrets.DEPLOY_PORT }}" "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" "\
+          ssh ${SSH_OPTS} -p "${{ secrets.DEPLOY_PORT }}" "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" "\
             cat > '${{ secrets.DEPLOY_BASE_PATH }}/storage/latest-android.json' <<'EOF'\n\
           {\n\
             \"platform\": \"android\",\n\
