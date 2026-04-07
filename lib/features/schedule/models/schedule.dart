@@ -18,8 +18,7 @@ class Schedule {
   List<int> get availableWeeks {
     final weeks = <int>{
       for (final course in courses) ...course.parsedWeeks,
-    }.toList()
-      ..sort();
+    }.toList()..sort();
     return weeks;
   }
 
@@ -51,5 +50,15 @@ class Schedule {
           .map((item) => Course.fromJson(item as Map<String, dynamic>))
           .toList(),
     );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'semester_label': semesterLabel,
+      'generated_at': generatedAt.toIso8601String(),
+      'is_stale': isStale,
+      'last_synced_at': lastSyncedAt?.toIso8601String(),
+      'courses': courses.map((course) => course.toJson()).toList(),
+    };
   }
 }

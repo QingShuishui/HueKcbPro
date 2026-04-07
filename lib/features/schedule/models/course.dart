@@ -34,4 +34,18 @@ class Course {
       parsedWeeks: List<int>.from(json['parsed_weeks'] as List),
     );
   }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'name': name,
+      'code': code,
+      'teacher': teacher,
+      'room': room,
+      'weekday': weekday,
+      'lesson_start': lessonStart,
+      'lesson_end': lessonEnd,
+      'raw_weeks': rawWeeks,
+      'parsed_weeks': parsedWeeks,
+    };
+  }
 }

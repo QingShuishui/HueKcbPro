@@ -44,6 +44,8 @@ class _SchedulePageState extends ConsumerState<SchedulePage>
   bool _autoRefreshInFlight = false;
   DateTime? _lastAutoRefreshBaseline;
   int? _programmaticWeekTarget;
+  ScheduleRefreshWarning? _visibleWarningPopup;
+  Timer? _warningPopupTimer;
 
   @override
   void initState() {
@@ -59,6 +61,7 @@ class _SchedulePageState extends ConsumerState<SchedulePage>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _warningPopupTimer?.cancel();
     _weekStripController.dispose();
     _pageController.dispose();
     super.dispose();
@@ -81,8 +84,10 @@ class _SchedulePageState extends ConsumerState<SchedulePage>
       _showRefreshSuccess = false;
     });
     try {
-      await ref.read(scheduleControllerProvider.notifier).manualRefresh();
-      if (mounted) {
+      final didRefresh = await ref
+          .read(scheduleControllerProvider.notifier)
+          .manualRefresh();
+      if (mounted && didRefresh) {
         setState(() {
           _isManualRefreshing = false;
           _showRefreshSuccess = true;
@@ -220,6 +225,39 @@ class _SchedulePageState extends ConsumerState<SchedulePage>
     return '课程表获取时间：$month-$day $hour:$minute';
   }
 
+  ScheduleRefreshWarning _warningForPinnedSchedule(Schedule? schedule) {
+    if (schedule?.isStale ?? false) {
+      return ScheduleRefreshWarning.staleCache;
+    }
+    return ScheduleRefreshWarning.none;
+  }
+
+  String _warningMessage(ScheduleRefreshWarning warning) {
+    switch (warning) {
+      case ScheduleRefreshWarning.offlineCache:
+        return '当前处于离线状态，正在显示缓存课表';
+      case ScheduleRefreshWarning.staleCache:
+        return '当前显示的是缓存课表，可能不是最新数据';
+      case ScheduleRefreshWarning.none:
+        return '';
+    }
+  }
+
+  void _showRefreshWarning(ScheduleRefreshWarning warning) {
+    _warningPopupTimer?.cancel();
+    setState(() {
+      _visibleWarningPopup = warning;
+    });
+    _warningPopupTimer = Timer(const Duration(milliseconds: 2200), () {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _visibleWarningPopup = null;
+      });
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final scheduleState = widget.schedule == null
@@ -227,6 +265,9 @@ class _SchedulePageState extends ConsumerState<SchedulePage>
         : const AsyncValue<Schedule?>.data(null);
     final authState = ref.watch(authControllerProvider);
     final currentSchedule = widget.schedule ?? scheduleState.valueOrNull;
+    final refreshWarning = widget.schedule == null
+        ? ref.watch(scheduleRefreshWarningProvider)
+        : _warningForPinnedSchedule(widget.schedule);
     final isLoading = widget.schedule == null && scheduleState.isLoading;
     final currentWeek = _weekForDate(_today);
     final refreshLabel = currentSchedule == null
@@ -267,7 +308,12 @@ class _SchedulePageState extends ConsumerState<SchedulePage>
           ],
         ),
         actions: [
+          if (refreshWarning != ScheduleRefreshWarning.none)
+            _ScheduleWarningButton(
+              onPressed: () => _showRefreshWarning(refreshWarning),
+            ),
           IconButton(
+            key: const ValueKey('schedule-refresh-button'),
             onPressed: _isManualRefreshing ? null : _refreshSchedule,
             icon: AnimatedRotation(
               turns: _isManualRefreshing ? 1 : 0,
@@ -425,6 +471,37 @@ class _SchedulePageState extends ConsumerState<SchedulePage>
                     ),
                   ),
                 ),
+                Positioned(
+                  top: 12,
+                  left: 16,
+                  right: 16,
+                  child: IgnorePointer(
+                    ignoring: _visibleWarningPopup == null,
+                    child: AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 220),
+                      switchInCurve: Curves.easeOutCubic,
+                      switchOutCurve: Curves.easeInCubic,
+                      transitionBuilder: (child, animation) {
+                        return FadeTransition(
+                          opacity: animation,
+                          child: SlideTransition(
+                            position: Tween<Offset>(
+                              begin: const Offset(0, -0.08),
+                              end: Offset.zero,
+                            ).animate(animation),
+                            child: child,
+                          ),
+                        );
+                      },
+                      child: _visibleWarningPopup == null
+                          ? const SizedBox.shrink()
+                          : _ScheduleWarningPopup(
+                              key: const ValueKey('schedule-warning-popup'),
+                              message: _warningMessage(_visibleWarningPopup!),
+                            ),
+                    ),
+                  ),
+                ),
                 if (_selectedWeek != currentWeek)
                   const Positioned(
                     right: 0,
@@ -439,6 +516,110 @@ class _SchedulePageState extends ConsumerState<SchedulePage>
                   ),
               ],
             ),
+    );
+  }
+}
+
+class _ScheduleWarningButton extends StatelessWidget {
+  const _ScheduleWarningButton({required this.onPressed});
+
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 4),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          key: const ValueKey('schedule-warning-button'),
+          onTap: onPressed,
+          borderRadius: BorderRadius.circular(999),
+          child: Ink(
+            key: const ValueKey('schedule-warning-surface'),
+            width: 28,
+            height: 28,
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [Color(0xCCFFF3C4), Color(0xB3FFE1A3)],
+              ),
+              shape: BoxShape.circle,
+              border: Border.fromBorderSide(
+                BorderSide(color: Color(0x33D97706)),
+              ),
+            ),
+            child: const Icon(
+              key: ValueKey('schedule-warning-icon'),
+              Icons.priority_high_rounded,
+              color: Color(0xFFB45309),
+              size: 16,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ScheduleWarningPopup extends StatelessWidget {
+  const _ScheduleWarningPopup({super.key, required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      bottom: false,
+      child: Material(
+        color: Colors.transparent,
+        child: DecoratedBox(
+          decoration: const BoxDecoration(
+            color: Color(0xFFFFFBF0),
+            borderRadius: BorderRadius.all(Radius.circular(20)),
+            border: Border.fromBorderSide(BorderSide(color: Color(0x26F59E0B))),
+            boxShadow: [
+              BoxShadow(
+                color: Color(0x1692400E),
+                blurRadius: 28,
+                offset: Offset(0, 14),
+              ),
+            ],
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            child: Row(
+              children: [
+                Container(
+                  width: 28,
+                  height: 28,
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFFFE7AE),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.priority_high_rounded,
+                    color: Color(0xFFB45309),
+                    size: 18,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    message,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: const Color(0xFF7C2D12),
+                      fontWeight: FontWeight.w700,
+                      height: 1.4,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
