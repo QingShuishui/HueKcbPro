@@ -18,8 +18,18 @@ class _BootAuthRepository extends AuthRepository {
   final LoginUser? _user;
 
   @override
-  Future<LoginUser?> restoreSession() async {
+  Future<LoginUser?> readStoredUser() async {
     return _user;
+  }
+
+  @override
+  Future<bool> hasStoredRefreshToken() async {
+    return _user != null;
+  }
+
+  @override
+  Future<SessionRefreshResult> refreshSessionSilently(LoginUser storedUser) async {
+    return SessionRefreshResult.refreshed;
   }
 }
 

@@ -6,11 +6,7 @@ import '../repositories/auth_repository.dart';
 enum AuthStatus { loading, signedOut, signedIn }
 
 class AuthState {
-  const AuthState({
-    required this.status,
-    this.user,
-    this.errorMessage,
-  });
+  const AuthState({required this.status, this.user, this.errorMessage});
 
   final AuthStatus status;
   final LoginUser? user;
@@ -76,13 +72,18 @@ class AuthController extends StateNotifier<AuthState> {
 
   Future<void> restoreSession() async {
     state = state.copyWith(status: AuthStatus.loading, clearError: true);
-    final user = await _repository.restoreSession();
-    if (user == null) {
+    final storedUser = await _repository.readStoredUser();
+    final hasRefreshToken = await _repository.hasStoredRefreshToken();
+    if (storedUser == null || !hasRefreshToken) {
       state = const AuthState(status: AuthStatus.signedOut);
       return;
     }
 
-    state = AuthState(status: AuthStatus.signedIn, user: user);
+    state = AuthState(status: AuthStatus.signedIn, user: storedUser);
+    final refreshResult = await _repository.refreshSessionSilently(storedUser);
+    if (refreshResult == SessionRefreshResult.invalid) {
+      state = const AuthState(status: AuthStatus.signedOut);
+    }
   }
 }
 
@@ -90,7 +91,8 @@ final authRepositoryProvider = Provider<AuthRepository>((ref) {
   return AuthRepository();
 });
 
-final authControllerProvider =
-    StateNotifierProvider<AuthController, AuthState>((ref) {
-  return AuthController(ref.watch(authRepositoryProvider));
-});
+final authControllerProvider = StateNotifierProvider<AuthController, AuthState>(
+  (ref) {
+    return AuthController(ref.watch(authRepositoryProvider));
+  },
+);

@@ -187,6 +187,35 @@ void main() {
     expect(find.text('3/29'), findsOneWidget);
   });
 
+  testWidgets('highlights the current weekday header cell', (tester) async {
+    final schedule = Schedule(
+      semesterLabel: '2026春',
+      generatedAt: DateTime(2026, 4, 5, 9),
+      isStale: false,
+      lastSyncedAt: DateTime(2026, 4, 5, 9),
+      courses: const [],
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ScheduleGrid(
+            schedule: schedule,
+            weekStartDate: DateTime(2026, 4, 6),
+          ),
+        ),
+      ),
+    );
+
+    final todayWeekday = DateTime.now().weekday;
+    final highlight = tester.widget<DecoratedBox>(
+      find.byKey(ValueKey('weekday-highlight-$todayWeekday')),
+    );
+    final decoration = highlight.decoration as BoxDecoration;
+
+    expect(decoration.color, const Color(0xFFBE185D));
+  });
+
   testWidgets(
     'renders configured short labels for long ideological course names',
     (tester) async {

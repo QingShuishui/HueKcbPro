@@ -140,6 +140,7 @@ class ScheduleGrid extends StatelessWidget {
 
 class _HeaderCell extends StatelessWidget {
   const _HeaderCell({
+    super.key,
     required this.child,
     required this.height,
     this.backgroundColor = const Color(0xFFFFF1F2),
@@ -387,6 +388,7 @@ class _HeaderRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final today = DateTime.now();
 
     return Row(
       children: [
@@ -406,44 +408,81 @@ class _HeaderRow extends StatelessWidget {
         ),
         for (var index = 0; index < _scheduleWeekdayLabels.length; index++)
           Expanded(
-            child: _HeaderCell(
-              height: metrics.headerHeight,
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    _scheduleWeekdayShortLabels[index],
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      fontWeight: FontWeight.w800,
-                      color: const Color(0xFFF472B6),
-                      fontSize: metrics.headerMetaSize,
-                      height: 1,
+            child: Builder(
+              builder: (context) {
+                final date = weekStartDate.add(Duration(days: index));
+                final isToday = DateUtils.isSameDay(date, today);
+                final content = Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      _scheduleWeekdayShortLabels[index],
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        fontWeight: FontWeight.w800,
+                        color: isToday
+                            ? const Color(0xFFFFF7FB)
+                            : const Color(0xFFF472B6),
+                        fontSize: metrics.headerMetaSize,
+                        height: 1,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    _scheduleWeekdayLabels[index],
-                    textAlign: TextAlign.center,
-                    style: theme.textTheme.labelLarge?.copyWith(
-                      fontWeight: FontWeight.w800,
-                      color: const Color(0xFF4B5563),
-                      fontSize: metrics.headerTitleSize,
-                      height: 1.05,
+                    const SizedBox(height: 2),
+                    Text(
+                      _scheduleWeekdayLabels[index],
+                      textAlign: TextAlign.center,
+                      style: theme.textTheme.labelLarge?.copyWith(
+                        fontWeight: FontWeight.w800,
+                        color: isToday
+                            ? Colors.white
+                            : const Color(0xFF4B5563),
+                        fontSize: metrics.headerTitleSize,
+                        height: 1.05,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    '${weekStartDate.add(Duration(days: index)).month}/${weekStartDate.add(Duration(days: index)).day}',
-                    textAlign: TextAlign.center,
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: const Color(0xFF9CA3AF),
-                      fontWeight: FontWeight.w700,
-                      fontSize: metrics.headerMetaSize,
-                      height: 1,
+                    const SizedBox(height: 2),
+                    Text(
+                      '${date.month}/${date.day}',
+                      textAlign: TextAlign.center,
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: isToday
+                            ? const Color(0xFFFFE4F1)
+                            : const Color(0xFF9CA3AF),
+                        fontWeight: FontWeight.w700,
+                        fontSize: metrics.headerMetaSize,
+                        height: 1,
+                      ),
                     ),
-                  ),
-                ],
-              ),
+                  ],
+                );
+
+                return _HeaderCell(
+                  key: ValueKey('weekday-header-${index + 1}'),
+                  height: metrics.headerHeight,
+                  child: isToday
+                      ? Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 4,
+                            vertical: 4,
+                          ),
+                          child: DecoratedBox(
+                            key: ValueKey('weekday-highlight-${index + 1}'),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFBE185D),
+                              borderRadius: BorderRadius.circular(16),
+                              boxShadow: const [
+                                BoxShadow(
+                                  color: Color(0x22BE185D),
+                                  blurRadius: 10,
+                                  offset: Offset(0, 4),
+                                ),
+                              ],
+                            ),
+                            child: Center(child: content),
+                          ),
+                        )
+                      : content,
+                );
+              },
             ),
           ),
       ],

@@ -27,13 +27,29 @@ class FakeAuthRepository extends AuthRepository {
 }
 
 class RestoringAuthRepository extends AuthRepository {
-  RestoringAuthRepository(this._user);
+  RestoringAuthRepository(
+    this._user, {
+    this.hasRefreshToken = true,
+    this.refreshResult = SessionRefreshResult.refreshed,
+  });
 
   final LoginUser? _user;
+  final bool hasRefreshToken;
+  final SessionRefreshResult refreshResult;
 
   @override
-  Future<LoginUser?> restoreSession() async {
+  Future<LoginUser?> readStoredUser() async {
     return _user;
+  }
+
+  @override
+  Future<bool> hasStoredRefreshToken() async => hasRefreshToken;
+
+  @override
+  Future<SessionRefreshResult> refreshSessionSilently(
+    LoginUser storedUser,
+  ) async {
+    return refreshResult;
   }
 }
 
@@ -46,10 +62,9 @@ void main() {
     );
     addTearDown(container.dispose);
 
-    await container.read(authControllerProvider.notifier).login(
-      academicUsername: 'demo_student_id',
-      password: 'pw123',
-    );
+    await container
+        .read(authControllerProvider.notifier)
+        .login(academicUsername: 'demo_student_id', password: 'pw123');
 
     expect(container.read(authControllerProvider).status, AuthStatus.signedIn);
     expect(
@@ -78,6 +93,34 @@ void main() {
 
     expect(container.read(authControllerProvider).status, AuthStatus.signedIn);
   });
+
+  test(
+    'restoreSession keeps user signed in when refresh fails offline',
+    () async {
+      final container = ProviderContainer(
+        overrides: [
+          authRepositoryProvider.overrideWithValue(
+            RestoringAuthRepository(
+              const LoginUser(
+                id: 1,
+                schoolCode: 'hue',
+                academicUsername: 'demo_student_id',
+              ),
+              refreshResult: SessionRefreshResult.retainedLocal,
+            ),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      await container.read(authControllerProvider.notifier).restoreSession();
+
+      expect(
+        container.read(authControllerProvider).status,
+        AuthStatus.signedIn,
+      );
+    },
+  );
 
   test('restoreSession signs user out when no valid session exists', () async {
     final container = ProviderContainer(

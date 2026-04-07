@@ -14,14 +14,18 @@ class AuthException implements Exception {
 }
 
 class AuthRepository {
-  AuthRepository({
-    ApiClient? apiClient,
-    SessionStorage? storage,
-  }) : _apiClient = apiClient ?? ApiClient(),
-       _storage = storage ?? SessionStorage();
+  AuthRepository({ApiClient? apiClient, SessionStorage? storage})
+    : _apiClient = apiClient ?? ApiClient(),
+      _storage = storage ?? SessionStorage();
 
   final ApiClient _apiClient;
   final SessionStorage _storage;
+
+  Future<LoginUser?> readStoredUser() => _storage.readUser();
+
+  Future<bool> hasStoredRefreshToken() async {
+    return await _storage.readRefreshToken() != null;
+  }
 
   Future<LoginResponse> login({
     required String academicUsername,
@@ -83,7 +87,40 @@ class AuthRepository {
     }
   }
 
+  Future<SessionRefreshResult> refreshSessionSilently(
+    LoginUser storedUser,
+  ) async {
+    final refreshToken = await _storage.readRefreshToken();
+    if (refreshToken == null) {
+      return SessionRefreshResult.invalid;
+    }
+
+    try {
+      final response = await _apiClient.dio.post<Map<String, dynamic>>(
+        '/auth/refresh',
+        data: {'refresh_token': refreshToken},
+      );
+
+      final json = response.data!;
+      await _storage.saveTokens(
+        json['access_token'] as String,
+        json['refresh_token'] as String,
+      );
+      await _storage.saveUser(storedUser);
+      return SessionRefreshResult.refreshed;
+    } on DioException catch (error) {
+      final statusCode = error.response?.statusCode;
+      if (statusCode == 401) {
+        await _storage.clear();
+        return SessionRefreshResult.invalid;
+      }
+      return SessionRefreshResult.retainedLocal;
+    }
+  }
+
   Future<void> logout() async {
     await _storage.clear();
   }
 }
+
+enum SessionRefreshResult { refreshed, retainedLocal, invalid }

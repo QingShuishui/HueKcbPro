@@ -102,7 +102,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                             decoration: const InputDecoration(labelText: '密码'),
                             validator: (value) =>
                                 (value == null || value.isEmpty)
-                                ? '请输入密码，默认为您的出生日期，例如：demo_password'
+                                ? '请输入密码，默认为您的出生日期'
                                 : null,
                           ),
                           const SizedBox(height: 8),
