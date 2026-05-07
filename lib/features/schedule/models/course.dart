@@ -22,9 +22,13 @@ class Course {
   final List<int> parsedWeeks;
 
   factory Course.fromJson(Map<String, dynamic> json) {
+    final parsedName = _parseNameAndCode(
+      json['name'] as String,
+      (json['code'] as String?) ?? '',
+    );
     return Course(
-      name: json['name'] as String,
-      code: (json['code'] as String?) ?? '',
+      name: parsedName.name,
+      code: parsedName.code,
       teacher: json['teacher'] as String,
       room: json['room'] as String,
       weekday: json['weekday'] as int,
@@ -48,4 +52,25 @@ class Course {
       'parsed_weeks': parsedWeeks,
     };
   }
+}
+
+({String name, String code}) _parseNameAndCode(String name, String code) {
+  final trimmedName = name.trim();
+  final trimmedCode = code.trim();
+  if (trimmedCode.isNotEmpty) {
+    return (name: trimmedName, code: trimmedCode);
+  }
+
+  final match = RegExp(r'^(.+?)([A-Z]{2,8})$').firstMatch(trimmedName);
+  if (match == null) {
+    return (name: trimmedName, code: '');
+  }
+
+  final extractedName = match.group(1)!.trim();
+  final extractedCode = match.group(2)!.trim();
+  if (extractedName.isEmpty) {
+    return (name: trimmedName, code: '');
+  }
+
+  return (name: extractedName, code: extractedCode);
 }

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:kcb_pro_android/features/auth/controllers/auth_controller.dart';
 import 'package:kcb_pro_android/features/auth/repositories/auth_repository.dart';
+import 'package:kcb_pro_android/features/settings/controllers/schedule_display_settings_controller.dart';
 import 'package:kcb_pro_android/features/settings/pages/about_page.dart';
 import 'package:kcb_pro_android/features/settings/pages/settings_page.dart';
 import 'package:kcb_pro_android/features/updates/update_providers.dart';
@@ -12,16 +13,20 @@ import 'package:kcb_pro_android/services/update_service.dart';
 void main() {
   testWidgets('renders account fields and project actions', (tester) async {
     await tester.pumpWidget(
-      const MaterialApp(
-        home: SettingsPage(
-          academicUsername: 'demo_student_id',
-          appVersionLabel: '1.0.0+1',
+      const ProviderScope(
+        child: MaterialApp(
+          home: SettingsPage(
+            academicUsername: 'demo_student_id',
+            appVersionLabel: '1.0.0+1',
+          ),
         ),
       ),
     );
     await tester.pump();
 
     expect(find.text('demo_student_id'), findsOneWidget);
+    expect(find.text('课表'), findsOneWidget);
+    expect(find.text('课表名称缩略显示'), findsOneWidget);
     expect(find.text('项目'), findsOneWidget);
     expect(find.text('检查更新'), findsOneWidget);
     expect(find.text('当前版本：1.0.0+1'), findsOneWidget);
@@ -90,14 +95,18 @@ void main() {
 
   testWidgets('about action opens about page', (tester) async {
     await tester.pumpWidget(
-      const MaterialApp(
-        home: SettingsPage(
-          academicUsername: 'demo_student_id',
-          appVersionLabel: '1.0.0+1',
+      const ProviderScope(
+        child: MaterialApp(
+          home: SettingsPage(
+            academicUsername: 'demo_student_id',
+            appVersionLabel: '1.0.0+1',
+          ),
         ),
       ),
     );
 
+    await tester.scrollUntilVisible(find.text('关于'), 120);
+    await tester.pumpAndSettle();
     await tester.tap(find.text('关于'));
     await tester.pumpAndSettle();
 
@@ -134,6 +143,45 @@ void main() {
 
     expect(container.read(authControllerProvider).status, AuthStatus.signedOut);
   });
+
+  testWidgets('toggles schedule course name abbreviation', (tester) async {
+    final container = ProviderContainer(
+      overrides: [
+        scheduleDisplaySettingsProvider.overrideWith(
+          (ref) => ScheduleDisplaySettingsController(
+            _MemoryScheduleDisplaySettingsStore(),
+          ),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(
+          home: SettingsPage(
+            academicUsername: 'demo_student_id',
+            appVersionLabel: '1.0.0+1',
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(
+      container.read(scheduleDisplaySettingsProvider).expandCourseDetails,
+      isTrue,
+    );
+
+    await tester.tap(find.byType(SwitchListTile));
+    await tester.pump();
+
+    expect(
+      container.read(scheduleDisplaySettingsProvider).expandCourseDetails,
+      isFalse,
+    );
+  });
 }
 
 class _FakeAuthRepository extends AuthRepository {
@@ -162,5 +210,18 @@ class _AvailableUpdateService extends UpdateService {
       sha256: 'abc',
       publishedAt: DateTime.parse('2026-04-06T10:00:00Z'),
     );
+  }
+}
+
+class _MemoryScheduleDisplaySettingsStore
+    implements ScheduleDisplaySettingsStore {
+  ScheduleDisplaySettings _settings = const ScheduleDisplaySettings();
+
+  @override
+  Future<ScheduleDisplaySettings> read() async => _settings;
+
+  @override
+  Future<void> write(ScheduleDisplaySettings settings) async {
+    _settings = settings;
   }
 }

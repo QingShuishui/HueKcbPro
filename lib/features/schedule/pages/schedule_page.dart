@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../services/refresh_policy.dart';
 import '../../auth/controllers/auth_controller.dart';
+import '../../settings/controllers/schedule_display_settings_controller.dart';
 import '../../settings/pages/settings_page.dart';
 import '../controllers/schedule_controller.dart';
 import '../models/schedule.dart';
@@ -15,6 +16,8 @@ final _semesterStartDate = DateTime(2026, 3, 2);
 const _weekTileExtent = 132.0;
 const _minWeek = 1;
 const _maxWeek = 18;
+const _baseScheduleSwipeHeight = 720.0;
+const _maxScheduleTextScale = 1.25;
 
 class SchedulePage extends ConsumerStatefulWidget {
   const SchedulePage({super.key, this.schedule, this.initialDate});
@@ -225,6 +228,67 @@ class _SchedulePageState extends ConsumerState<SchedulePage>
     return '课程表获取时间：$month-$day $hour:$minute';
   }
 
+  TextScaler _cappedScheduleTextScaler(BuildContext context) {
+    final scale = MediaQuery.textScalerOf(
+      context,
+    ).scale(1).clamp(1.0, _maxScheduleTextScale).toDouble();
+    return TextScaler.linear(scale);
+  }
+
+  double _scheduleSwipeHeight(BuildContext context, Schedule schedule) {
+    final mediaQuery = MediaQuery.of(context);
+    final textScale = _cappedScheduleTextScaler(context).scale(1);
+    final availableHeight =
+        mediaQuery.size.height -
+        mediaQuery.padding.vertical -
+        kToolbarHeight -
+        92;
+    final minHeight = availableHeight.isFinite
+        ? availableHeight.clamp(_baseScheduleSwipeHeight, double.infinity)
+        : _baseScheduleSwipeHeight;
+    final maxHeight = mediaQuery.size.height * 1.8;
+    final naturalHeight = _estimateScheduleHeight(schedule, textScale);
+    return naturalHeight.clamp(minHeight, maxHeight).toDouble();
+  }
+
+  double _estimateScheduleHeight(Schedule schedule, double textScale) {
+    const headerHeight = 56.0;
+    const baseEmptyRowHeight = 76.0;
+    const maxRowHeight = 150.0;
+    final rowHeights = [
+      for (var lessonStart = 1; lessonStart <= 11; lessonStart += 2)
+        _estimateRowHeight(
+          schedule,
+          lessonStart,
+          textScale,
+        ).clamp(baseEmptyRowHeight, maxRowHeight),
+    ];
+    return headerHeight * textScale +
+        rowHeights.fold<double>(0, (sum, height) => sum + height);
+  }
+
+  double _estimateRowHeight(
+    Schedule schedule,
+    int lessonStart,
+    double textScale,
+  ) {
+    var maxWeight = 0;
+    for (final course in schedule.courses.where(
+      (course) => course.lessonStart == lessonStart,
+    )) {
+      final weight =
+          course.name.length +
+          course.room.length +
+          course.code.length +
+          course.teacher.length;
+      maxWeight = maxWeight < weight ? weight : maxWeight;
+    }
+    if (maxWeight == 0) {
+      return 76.0 * textScale;
+    }
+    return (82.0 + maxWeight * 1.2) * textScale;
+  }
+
   ScheduleRefreshWarning _warningForPinnedSchedule(Schedule? schedule) {
     if (schedule?.isStale ?? false) {
       return ScheduleRefreshWarning.staleCache;
@@ -265,6 +329,7 @@ class _SchedulePageState extends ConsumerState<SchedulePage>
         : const AsyncValue<Schedule?>.data(null);
     final authState = ref.watch(authControllerProvider);
     final currentSchedule = widget.schedule ?? scheduleState.valueOrNull;
+    final scheduleDisplaySettings = ref.watch(scheduleDisplaySettingsProvider);
     final refreshWarning = widget.schedule == null
         ? ref.watch(scheduleRefreshWarningProvider)
         : _warningForPinnedSchedule(widget.schedule);
@@ -273,6 +338,7 @@ class _SchedulePageState extends ConsumerState<SchedulePage>
     final refreshLabel = currentSchedule == null
         ? null
         : _formatRefreshTime(currentSchedule);
+    final scheduleTextScaler = _cappedScheduleTextScaler(context);
 
     if (widget.schedule == null && currentSchedule != null) {
       unawaited(_maybeAutoRefresh(currentSchedule));
@@ -377,6 +443,7 @@ class _SchedulePageState extends ConsumerState<SchedulePage>
                           currentWeek: currentWeek,
                           controller: _weekStripController,
                           onWeekTap: _jumpToWeek,
+                          textScaler: scheduleTextScaler,
                         ),
                         const SizedBox(height: 8),
                         if (_isManualRefreshing)
@@ -419,7 +486,10 @@ class _SchedulePageState extends ConsumerState<SchedulePage>
                           ),
                         SizedBox(
                           key: const ValueKey('schedule-swipe-area'),
-                          height: 720,
+                          height: _scheduleSwipeHeight(
+                            context,
+                            currentSchedule,
+                          ),
                           child: PageView.builder(
                             controller: _pageController,
                             onPageChanged: (index) {
@@ -453,13 +523,21 @@ class _SchedulePageState extends ConsumerState<SchedulePage>
                                     1 - distance,
                                   )!;
 
-                                  return Opacity(
-                                    opacity: opacity,
-                                    child: ScheduleGrid(
-                                      key: ValueKey('schedule-week-$week'),
-                                      schedule: weekSchedule,
-                                      weekStartDate: _weekStartForWeek(week),
-                                      borderRadius: borderRadius,
+                                  return MediaQuery(
+                                    data: MediaQuery.of(
+                                      context,
+                                    ).copyWith(textScaler: scheduleTextScaler),
+                                    child: Opacity(
+                                      opacity: opacity,
+                                      child: ScheduleGrid(
+                                        key: ValueKey('schedule-grid-$week'),
+                                        schedule: weekSchedule,
+                                        weekStartDate: _weekStartForWeek(week),
+                                        borderRadius: borderRadius,
+                                        expandCourseDetails:
+                                            scheduleDisplaySettings
+                                                .expandCourseDetails,
+                                      ),
                                     ),
                                   );
                                 },
@@ -678,36 +756,42 @@ class _CompactTopBar extends StatelessWidget {
     required this.currentWeek,
     required this.controller,
     required this.onWeekTap,
+    required this.textScaler,
   });
 
   final int selectedWeek;
   final int currentWeek;
   final ScrollController controller;
   final ValueChanged<int> onWeekTap;
+  final TextScaler textScaler;
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: 64,
-      child: ListView.builder(
-        key: const ValueKey('infinite-week-strip'),
-        controller: controller,
-        scrollDirection: Axis.horizontal,
-        itemExtent: _weekTileExtent,
-        itemCount: _maxWeek,
-        itemBuilder: (context, index) {
-          final week = index + 1;
-          return Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: _WeekTile(
-              key: ValueKey('week-tile-$week'),
-              week: week,
-              isCurrentWeek: week == currentWeek,
-              isSelected: week == selectedWeek,
-              onTap: () => onWeekTap(week),
-            ),
-          );
-        },
+    final textScale = textScaler.scale(1).toDouble();
+    return MediaQuery(
+      data: MediaQuery.of(context).copyWith(textScaler: textScaler),
+      child: SizedBox(
+        height: 64 + (textScale - 1) * 40,
+        child: ListView.builder(
+          key: const ValueKey('infinite-week-strip'),
+          controller: controller,
+          scrollDirection: Axis.horizontal,
+          itemExtent: _weekTileExtent,
+          itemCount: _maxWeek,
+          itemBuilder: (context, index) {
+            final week = index + 1;
+            return Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: _WeekTile(
+                key: ValueKey('week-tile-$week'),
+                week: week,
+                isCurrentWeek: week == currentWeek,
+                isSelected: week == selectedWeek,
+                onTap: () => onWeekTap(week),
+              ),
+            );
+          },
+        ),
       ),
     );
   }
@@ -729,6 +813,9 @@ class _WeekTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final textScale = MediaQuery.textScalerOf(
+      context,
+    ).scale(1).clamp(1.0, 1.8).toDouble();
     final start = _semesterStartDate.add(Duration(days: (week - 1) * 7));
     final end = start.add(const Duration(days: 6));
     final backgroundColor = isSelected
@@ -766,7 +853,10 @@ class _WeekTile extends StatelessWidget {
                 ]
               : null,
         ),
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+        padding: EdgeInsets.symmetric(
+          horizontal: 8,
+          vertical: 6 + (textScale - 1) * 4,
+        ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
@@ -782,13 +872,19 @@ class _WeekTile extends StatelessWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text(
-                  '第$week周',
-                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    color: valueColor,
-                    fontWeight: FontWeight.w900,
-                    fontSize: 11,
-                    height: 1,
+                Flexible(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      '第$week周',
+                      maxLines: 1,
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        color: valueColor,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 11,
+                        height: 1,
+                      ),
+                    ),
                   ),
                 ),
                 if (isCurrentWeek) ...[

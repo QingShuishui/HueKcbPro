@@ -28,6 +28,31 @@ void main() {
     expect(schedule.courses.single.room, 'S4409');
   });
 
+  test('extracts trailing course code when backend leaves it in name', () {
+    final schedule = Schedule.fromJson({
+      'semester_label': '2026春',
+      'generated_at': '2026-04-04T10:00:00Z',
+      'is_stale': false,
+      'last_synced_at': '2026-04-04T10:00:00Z',
+      'courses': [
+        {
+          'name': 'JavaWeb程序设计SIT',
+          'code': '',
+          'teacher': 'Sam',
+          'room': 'S4408计算机专业实验室',
+          'weekday': 1,
+          'lesson_start': 9,
+          'lesson_end': 10,
+          'raw_weeks': '1,5-8(周)',
+          'parsed_weeks': [1, 5, 6, 7, 8],
+        },
+      ],
+    });
+
+    expect(schedule.courses.single.name, 'JavaWeb程序设计');
+    expect(schedule.courses.single.code, 'SIT');
+  });
+
   test('derives available weeks and filters courses by selected week', () {
     final schedule = Schedule.fromJson({
       'semester_label': '2026春',

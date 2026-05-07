@@ -5,6 +5,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../auth/controllers/auth_controller.dart';
+import '../controllers/schedule_display_settings_controller.dart';
 import '../../updates/update_prompt.dart';
 import '../../updates/update_providers.dart';
 import '../../../services/update_service.dart';
@@ -82,6 +83,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
 
   @override
   Widget build(BuildContext context) {
+    final scheduleDisplaySettings = ref.watch(scheduleDisplaySettingsProvider);
     return Scaffold(
       appBar: AppBar(title: const Text('设置')),
       body: Container(
@@ -119,6 +121,24 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                     child: const Text('退出登录'),
                   ),
                 ],
+              ),
+            ),
+            _SectionCard(
+              title: '课表',
+              child: SwitchListTile(
+                key: const ValueKey('schedule-expand-details-switch'),
+                value: !scheduleDisplaySettings.expandCourseDetails,
+                onChanged: (value) {
+                  ref
+                      .read(scheduleDisplaySettingsProvider.notifier)
+                      .setExpandCourseDetails(!value);
+                },
+                contentPadding: EdgeInsets.zero,
+                title: const Text(
+                  '课表名称缩略显示',
+                  style: TextStyle(fontWeight: FontWeight.w800),
+                ),
+                activeThumbColor: const Color(0xFFBE185D),
               ),
             ),
             _SectionCard(
@@ -200,16 +220,9 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
 }
 
 class _SectionCard extends StatelessWidget {
-  const _SectionCard({
-    this.title,
-    this.titleFuture,
-    this.titleBuilder,
-    required this.child,
-  });
+  const _SectionCard({required this.title, required this.child});
 
-  final String? title;
-  final Future<String?>? titleFuture;
-  final String Function(String?)? titleBuilder;
+  final String title;
   final Widget child;
 
   @override
@@ -231,28 +244,13 @@ class _SectionCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (title != null)
-            Text(
-              title!,
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w900,
-                color: const Color(0xFF374151),
-              ),
-            )
-          else
-            FutureBuilder<String?>(
-              future: titleFuture,
-              builder: (context, snapshot) {
-                final resolved = titleBuilder?.call(snapshot.data) ?? '';
-                return Text(
-                  resolved,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w900,
-                    color: const Color(0xFF374151),
-                  ),
-                );
-              },
+          Text(
+            title,
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w900,
+              color: const Color(0xFF374151),
             ),
+          ),
           const SizedBox(height: 14),
           child,
         ],

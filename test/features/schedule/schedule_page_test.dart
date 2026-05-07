@@ -9,6 +9,8 @@ import 'package:kcb_pro_android/features/schedule/models/course.dart';
 import 'package:kcb_pro_android/features/schedule/models/schedule.dart';
 import 'package:kcb_pro_android/features/schedule/pages/schedule_page.dart';
 import 'package:kcb_pro_android/features/schedule/repositories/schedule_repository.dart';
+import 'package:kcb_pro_android/features/schedule/widgets/schedule_grid.dart';
+import 'package:kcb_pro_android/features/settings/controllers/schedule_display_settings_controller.dart';
 
 void main() {
   testWidgets('shows week header and refresh time', (tester) async {
@@ -46,10 +48,66 @@ void main() {
     expect(find.textContaining('课表可能不是最新数据'), findsNothing);
     expect(find.textContaining('课程表获取时间：'), findsOneWidget);
     expect(find.text('软件测试技术'), findsOneWidget);
-    expect(find.textContaining('SIT'), findsOneWidget);
     expect(find.textContaining('S4409'), findsOneWidget);
     expect(find.textContaining('学号：'), findsNothing);
     expect(find.text('第1周'), findsWidgets);
+  });
+
+  testWidgets('uses schedule display setting for course detail expansion', (
+    tester,
+  ) async {
+    final schedule = Schedule(
+      semesterLabel: '2026春',
+      generatedAt: DateTime(2026, 4, 4, 10),
+      isStale: false,
+      lastSyncedAt: DateTime(2026, 4, 4, 8),
+      courses: const [
+        Course(
+          name: 'JavaWeb程序设计',
+          code: 'SIT',
+          teacher: 'Sam',
+          room: 'S4408计算机专业实验室',
+          weekday: 1,
+          lessonStart: 9,
+          lessonEnd: 10,
+          rawWeeks: '1,5-8(周)',
+          parsedWeeks: [1],
+        ),
+      ],
+    );
+    final container = ProviderContainer(
+      overrides: [
+        scheduleDisplaySettingsProvider.overrideWith(
+          (ref) => ScheduleDisplaySettingsController(
+            _MemoryScheduleDisplaySettingsStore(
+              const ScheduleDisplaySettings(expandCourseDetails: false),
+            ),
+          ),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    await tester.binding.setSurfaceSize(const Size(360, 640));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(
+          home: SchedulePage(
+            schedule: schedule,
+            initialDate: DateTime(2026, 3, 2),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    final grid = tester.widget<ScheduleGrid>(
+      find.byKey(const ValueKey('schedule-grid-1')),
+    );
+    expect(grid.expandCourseDetails, isFalse);
   });
 
   testWidgets('shows retry action when schedule loading fails', (tester) async {
@@ -117,7 +175,10 @@ void main() {
     );
     final decoration = surface.decoration! as BoxDecoration;
     final gradient = decoration.gradient! as LinearGradient;
-    expect(gradient.colors.every((color) => color.alpha < 0xFF), isTrue);
+    expect(
+      gradient.colors.every((color) => (color.a * 255).round() < 0xFF),
+      isTrue,
+    );
     expect(decoration.shape, BoxShape.circle);
     expect(decoration.boxShadow, isNull);
 
@@ -446,6 +507,99 @@ void main() {
     );
 
     expect(find.byType(PageView), findsOneWidget);
+  });
+
+  testWidgets(
+    'caps schedule height and grid text scale for large system fonts',
+    (tester) async {
+      final schedule = Schedule(
+        semesterLabel: '2026春',
+        generatedAt: DateTime(2026, 4, 4, 10),
+        isStale: false,
+        lastSyncedAt: DateTime(2026, 4, 4, 8),
+        courses: const [
+          Course(
+            name: '数据库原理 / 高等数学AII',
+            code: 'SIT',
+            teacher: '张三',
+            room: 'S4408 / 10107',
+            weekday: 4,
+            lessonStart: 5,
+            lessonEnd: 6,
+            rawWeeks: '1-16(周)',
+            parsedWeeks: [4],
+          ),
+        ],
+      );
+
+      await tester.binding.setSurfaceSize(const Size(360, 780));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(
+        ProviderScope(
+          child: MediaQuery(
+            data: const MediaQueryData(
+              size: Size(360, 780),
+              textScaler: TextScaler.linear(2.0),
+            ),
+            child: MaterialApp(
+              home: SchedulePage(
+                schedule: schedule,
+                initialDate: DateTime(2026, 3, 25),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      final swipeArea = tester.widget<SizedBox>(
+        find.byKey(const ValueKey('schedule-swipe-area')),
+      );
+      expect(swipeArea.height, greaterThanOrEqualTo(720));
+      expect(swipeArea.height, lessThanOrEqualTo(780 * 1.8));
+
+      final gridContext = tester.element(
+        find.byKey(const ValueKey('schedule-grid-4')),
+      );
+      expect(MediaQuery.textScalerOf(gridContext).scale(1), 1.25);
+    },
+  );
+
+  testWidgets('keeps current week tile within bounds at large font sizes', (
+    tester,
+  ) async {
+    final schedule = Schedule(
+      semesterLabel: '2026春',
+      generatedAt: DateTime(2026, 4, 4, 10),
+      isStale: false,
+      lastSyncedAt: DateTime(2026, 4, 4, 8),
+      courses: const [],
+    );
+
+    await tester.binding.setSurfaceSize(const Size(320, 780));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MediaQuery(
+          data: const MediaQueryData(
+            size: Size(320, 780),
+            textScaler: TextScaler.linear(1.8),
+          ),
+          child: MaterialApp(
+            home: SchedulePage(
+              schedule: schedule,
+              initialDate: DateTime(2026, 3, 2),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(tester.takeException(), isNull);
+    expect(find.byKey(const ValueKey('week-tile-1')), findsOneWidget);
+    final currentWeekLabel = tester.widget<Text>(find.text('第1周').first);
+    expect(currentWeekLabel.overflow, isNot(TextOverflow.ellipsis));
   });
 
   testWidgets(
@@ -875,6 +1029,22 @@ final _staleWarningSchedule = Schedule(
     ),
   ],
 );
+
+class _MemoryScheduleDisplaySettingsStore
+    implements ScheduleDisplaySettingsStore {
+  _MemoryScheduleDisplaySettingsStore([ScheduleDisplaySettings? settings])
+    : _settings = settings ?? const ScheduleDisplaySettings();
+
+  ScheduleDisplaySettings _settings;
+
+  @override
+  Future<ScheduleDisplaySettings> read() async => _settings;
+
+  @override
+  Future<void> write(ScheduleDisplaySettings settings) async {
+    _settings = settings;
+  }
+}
 
 DioException _offlineError() {
   return DioException.connectionError(
