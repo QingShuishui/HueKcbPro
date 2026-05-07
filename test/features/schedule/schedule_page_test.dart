@@ -9,6 +9,7 @@ import 'package:kcb_pro_android/features/schedule/models/course.dart';
 import 'package:kcb_pro_android/features/schedule/models/schedule.dart';
 import 'package:kcb_pro_android/features/schedule/pages/schedule_page.dart';
 import 'package:kcb_pro_android/features/schedule/repositories/schedule_repository.dart';
+import 'package:kcb_pro_android/features/schedule/widgets/schedule_grid.dart';
 
 void main() {
   testWidgets('shows week header and refresh time', (tester) async {
@@ -446,6 +447,128 @@ void main() {
     );
 
     expect(find.byType(PageView), findsOneWidget);
+  });
+
+  testWidgets('uses measured course content height and caps grid text scale', (
+    tester,
+  ) async {
+    final schedule = Schedule(
+      semesterLabel: '2026春',
+      generatedAt: DateTime(2026, 4, 4, 10),
+      isStale: false,
+      lastSyncedAt: DateTime(2026, 4, 4, 8),
+      courses: const [
+        Course(
+          name: '面向对象程序设计面向对象程序设计面向对象程序设计',
+          code: 'SIT / BYYL / KCSJ',
+          teacher: '张三丰',
+          room: 'S4408计算机专业实验室 / S3301',
+          weekday: 1,
+          lessonStart: 1,
+          lessonEnd: 2,
+          rawWeeks: '1-16(周)',
+          parsedWeeks: [4],
+        ),
+      ],
+    );
+
+    await tester.binding.setSurfaceSize(const Size(360, 780));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MediaQuery(
+          data: const MediaQueryData(
+            size: Size(360, 780),
+            textScaler: TextScaler.linear(1.8),
+          ),
+          child: MaterialApp(
+            home: SchedulePage(
+              schedule: schedule,
+              initialDate: DateTime(2026, 3, 25),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final swipeArea = tester.widget<SizedBox>(
+      find.byKey(const ValueKey('schedule-swipe-area')),
+    );
+    final measuredHeight = ScheduleGrid.estimatedHeight(
+      schedule: schedule.filterByWeek(4),
+      width: 340,
+      textScaler: const TextScaler.linear(1.2),
+      textDirection: TextDirection.ltr,
+      theme: Theme.of(tester.element(find.byType(SchedulePage))),
+    );
+    expect(swipeArea.height, measuredHeight + scheduleGridHeightSlack);
+    expect(swipeArea.height, lessThanOrEqualTo(780 * 1.5));
+
+    final gridContext = tester.element(
+      find.byKey(const ValueKey('schedule-week-4')),
+    );
+    expect(MediaQuery.textScalerOf(gridContext).scale(1), 1.2);
+  });
+
+  testWidgets('does not cap schedule height below measured content', (
+    tester,
+  ) async {
+    final longCourses = List.generate(6, (index) {
+      final lessonStart = index * 2 + 1;
+      return Course(
+        name: '极端超长课程名称测试极端超长课程名称测试极端超长课程名称测试极端超长课程名称测试第$lessonStart节',
+        code: 'VERY-LONG-CODE / DEBUG-LONG-CODE / HEIGHT-MEASURE',
+        teacher: 'Debug Teacher With Long Name',
+        room: 'S4408计算机专业实验室 / BY409智慧教室 / 东区实验楼A305 / 图书馆报告厅',
+        weekday: 1,
+        lessonStart: lessonStart,
+        lessonEnd: lessonStart + 1,
+        rawWeeks: '1-16(周)',
+        parsedWeeks: const [4],
+      );
+    });
+    final schedule = Schedule(
+      semesterLabel: '2026春',
+      generatedAt: DateTime(2026, 4, 4, 10),
+      isStale: false,
+      lastSyncedAt: DateTime(2026, 4, 4, 8),
+      courses: longCourses,
+    );
+
+    await tester.binding.setSurfaceSize(const Size(428, 997));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MediaQuery(
+          data: const MediaQueryData(
+            size: Size(428, 997),
+            textScaler: TextScaler.linear(1.8),
+          ),
+          child: MaterialApp(
+            home: SchedulePage(
+              schedule: schedule,
+              initialDate: DateTime(2026, 3, 25),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final swipeArea = tester.widget<SizedBox>(
+      find.byKey(const ValueKey('schedule-swipe-area')),
+    );
+    final measuredHeight = ScheduleGrid.estimatedHeight(
+      schedule: schedule.filterByWeek(4),
+      width: 408,
+      textScaler: const TextScaler.linear(1.2),
+      textDirection: TextDirection.ltr,
+      theme: Theme.of(tester.element(find.byType(SchedulePage))),
+    );
+    expect(measuredHeight + scheduleGridHeightSlack, greaterThan(997 * 1.5));
+    expect(swipeArea.height, measuredHeight + scheduleGridHeightSlack);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets(

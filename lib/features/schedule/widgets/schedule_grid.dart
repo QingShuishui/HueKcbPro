@@ -17,6 +17,7 @@ const _courseDisplayNameAliases = {
   '毛泽东思想和中国特色社会主义理论体系概论': '毛概',
   '习近平新时代中国特色社会主义思想概论': '习思想',
 };
+const scheduleGridHeightSlack = 56.0;
 
 String _displayCourseName(String name) {
   return _courseDisplayNameAliases[name] ?? name;
@@ -33,6 +34,46 @@ class ScheduleGrid extends StatelessWidget {
   final Schedule schedule;
   final DateTime weekStartDate;
   final double borderRadius;
+
+  static double estimatedHeight({
+    required Schedule schedule,
+    required double width,
+    required TextScaler textScaler,
+    required TextDirection textDirection,
+    required ThemeData theme,
+    double? maxHeight,
+  }) {
+    final metrics = _ResponsiveScheduleMetrics.fromConstraints(
+      width,
+      maxHeight ?? double.infinity,
+    );
+    final rowsHeight = _lessonLabels.fold<double>(0, (totalHeight, label) {
+      final lessonStart = _lessonStartForLabel(label);
+      final rowHeight =
+          List.generate(7, (index) {
+            final weekday = index + 1;
+            final courses = schedule.courses
+                .where(
+                  (course) =>
+                      course.weekday == weekday &&
+                      course.lessonStart == lessonStart,
+                )
+                .toList();
+            return _estimatedCourseCellHeight(
+              courses: courses,
+              metrics: metrics,
+              textScaler: textScaler,
+              textDirection: textDirection,
+              theme: theme,
+            );
+          }).fold<double>(metrics.minCellHeight, (maxHeight, cellHeight) {
+            return cellHeight > maxHeight ? cellHeight : maxHeight;
+          });
+      return totalHeight + rowHeight;
+    });
+
+    return metrics.headerHeight + rowsHeight;
+  }
 
   static const _lessonLabels = [
     '1-2节',
@@ -51,6 +92,10 @@ class ScheduleGrid extends StatelessWidget {
     '20:20-21:05',
   ];
   static const _lessonPeriods = ['上午', '上午', '下午', '下午', '晚上', '晚上'];
+
+  static int _lessonStartForLabel(String label) {
+    return int.parse(label.split('-').first);
+  }
 
   Color _cardColor(int index) {
     const palette = [
@@ -379,6 +424,131 @@ class _CourseCell extends StatelessWidget {
   }
 }
 
+double _estimatedCourseCellHeight({
+  required List<Course> courses,
+  required _ResponsiveScheduleMetrics metrics,
+  required TextScaler textScaler,
+  required TextDirection textDirection,
+  required ThemeData theme,
+}) {
+  if (courses.isEmpty) {
+    return metrics.minCellHeight;
+  }
+
+  final cardMargin = metrics.gap / 2;
+  final contentWidth =
+      metrics.dayColumnWidth - metrics.gap - metrics.innerPadding * 2;
+  final combinedNames = courses
+      .map((course) => _displayCourseName(course.name))
+      .join(' / ');
+  final combinedCodes = courses
+      .map((course) => course.code)
+      .where((code) => code.isNotEmpty)
+      .join(' / ');
+  final combinedRooms = courses
+      .map((course) => course.room)
+      .where((room) => room.isNotEmpty)
+      .join(' / ');
+
+  var contentHeight = _measureTextHeight(
+    text: combinedNames,
+    style:
+        theme.textTheme.titleSmall?.copyWith(
+          fontWeight: FontWeight.w800,
+          fontSize: courses.length > 1
+              ? metrics.courseTitleSize - 0.5
+              : metrics.courseTitleSize,
+          height: 1.1,
+        ) ??
+        TextStyle(
+          fontWeight: FontWeight.w800,
+          fontSize: courses.length > 1
+              ? metrics.courseTitleSize - 0.5
+              : metrics.courseTitleSize,
+          height: 1.1,
+        ),
+    maxWidth: contentWidth,
+    textScaler: textScaler,
+    textDirection: textDirection,
+  );
+
+  if (combinedCodes.isNotEmpty) {
+    contentHeight += metrics.detailGap;
+    contentHeight += _measureTextHeight(
+      text: combinedCodes,
+      style:
+          theme.textTheme.bodySmall?.copyWith(
+            fontWeight: FontWeight.w700,
+            fontSize: metrics.courseDetailSize,
+            height: 1.05,
+          ) ??
+          TextStyle(
+            fontWeight: FontWeight.w700,
+            fontSize: metrics.courseDetailSize,
+            height: 1.05,
+          ),
+      maxWidth: contentWidth,
+      textScaler: textScaler,
+      textDirection: textDirection,
+    );
+  }
+
+  contentHeight += metrics.detailGap;
+  contentHeight += _measureTextHeight(
+    text: combinedRooms,
+    style:
+        theme.textTheme.bodySmall?.copyWith(
+          fontWeight: FontWeight.w600,
+          fontSize: metrics.courseDetailSize,
+          height: 1.05,
+        ) ??
+        TextStyle(
+          fontWeight: FontWeight.w600,
+          fontSize: metrics.courseDetailSize,
+          height: 1.05,
+        ),
+    maxWidth: contentWidth,
+    textScaler: textScaler,
+    textDirection: textDirection,
+  );
+
+  if (courses.length == 1 &&
+      courses.first.teacher.isNotEmpty &&
+      metrics.showTeacherChip) {
+    contentHeight += metrics.detailGap;
+    contentHeight +=
+        textScaler.scale(metrics.teacherSize) +
+        metrics.teacherVerticalPadding * 2;
+  }
+
+  final measuredHeight =
+      contentHeight + metrics.innerPadding * 2 + cardMargin * 2;
+  return measuredHeight > metrics.minCellHeight
+      ? measuredHeight
+      : metrics.minCellHeight;
+}
+
+double _measureTextHeight({
+  required String text,
+  required TextStyle style,
+  required double maxWidth,
+  required TextScaler textScaler,
+  required TextDirection textDirection,
+  int? maxLines,
+}) {
+  if (text.isEmpty) {
+    return 0;
+  }
+
+  final painter = TextPainter(
+    text: TextSpan(text: text, style: style),
+    maxLines: maxLines,
+    textDirection: textDirection,
+    textScaler: textScaler,
+  )..layout(maxWidth: maxWidth > 0 ? maxWidth : 1);
+  return painter.height;
+}
+
 class _HeaderRow extends StatelessWidget {
   const _HeaderRow({required this.metrics, required this.weekStartDate});
 
@@ -412,47 +582,50 @@ class _HeaderRow extends StatelessWidget {
               builder: (context) {
                 final date = weekStartDate.add(Duration(days: index));
                 final isToday = DateUtils.isSameDay(date, today);
-                final content = Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      _scheduleWeekdayShortLabels[index],
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        fontWeight: FontWeight.w800,
-                        color: isToday
-                            ? const Color(0xFFFFF7FB)
-                            : const Color(0xFFF472B6),
-                        fontSize: metrics.headerMetaSize,
-                        height: 1,
+                final content = FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        _scheduleWeekdayShortLabels[index],
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          fontWeight: FontWeight.w800,
+                          color: isToday
+                              ? const Color(0xFFFFF7FB)
+                              : const Color(0xFFF472B6),
+                          fontSize: metrics.headerMetaSize,
+                          height: 1,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      _scheduleWeekdayLabels[index],
-                      textAlign: TextAlign.center,
-                      style: theme.textTheme.labelLarge?.copyWith(
-                        fontWeight: FontWeight.w800,
-                        color: isToday
-                            ? Colors.white
-                            : const Color(0xFF4B5563),
-                        fontSize: metrics.headerTitleSize,
-                        height: 1.05,
+                      const SizedBox(height: 2),
+                      Text(
+                        _scheduleWeekdayLabels[index],
+                        textAlign: TextAlign.center,
+                        style: theme.textTheme.labelLarge?.copyWith(
+                          fontWeight: FontWeight.w800,
+                          color: isToday
+                              ? Colors.white
+                              : const Color(0xFF4B5563),
+                          fontSize: metrics.headerTitleSize,
+                          height: 1.05,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      '${date.month}/${date.day}',
-                      textAlign: TextAlign.center,
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        color: isToday
-                            ? const Color(0xFFFFE4F1)
-                            : const Color(0xFF9CA3AF),
-                        fontWeight: FontWeight.w700,
-                        fontSize: metrics.headerMetaSize,
-                        height: 1,
+                      const SizedBox(height: 2),
+                      Text(
+                        '${date.month}/${date.day}',
+                        textAlign: TextAlign.center,
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: isToday
+                              ? const Color(0xFFFFE4F1)
+                              : const Color(0xFF9CA3AF),
+                          fontWeight: FontWeight.w700,
+                          fontSize: metrics.headerMetaSize,
+                          height: 1,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 );
 
                 return _HeaderCell(

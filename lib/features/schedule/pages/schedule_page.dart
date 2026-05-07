@@ -15,6 +15,7 @@ final _semesterStartDate = DateTime(2026, 3, 2);
 const _weekTileExtent = 132.0;
 const _minWeek = 1;
 const _maxWeek = 18;
+const _maxScheduleTextScale = 1.2;
 
 class SchedulePage extends ConsumerStatefulWidget {
   const SchedulePage({super.key, this.schedule, this.initialDate});
@@ -225,6 +226,38 @@ class _SchedulePageState extends ConsumerState<SchedulePage>
     return '课程表获取时间：$month-$day $hour:$minute';
   }
 
+  TextScaler _scheduleTextScaler(BuildContext context) {
+    final scale = MediaQuery.textScalerOf(
+      context,
+    ).scale(1).clamp(1.0, _maxScheduleTextScale).toDouble();
+    return TextScaler.linear(scale);
+  }
+
+  double _scheduleSwipeHeight(BuildContext context, Schedule schedule) {
+    final mediaQuery = MediaQuery.of(context);
+    final horizontalPadding = 20.0;
+    final gridWidth = mediaQuery.size.width - horizontalPadding;
+    final scheduleTextScaler = _scheduleTextScaler(context);
+    final textDirection = Directionality.of(context);
+    final theme = Theme.of(context);
+    final measuredHeight =
+        List.generate(_maxWeek, (index) {
+          final weekSchedule = schedule.filterByWeek(index + 1);
+          return ScheduleGrid.estimatedHeight(
+            schedule: weekSchedule,
+            width: gridWidth,
+            textScaler: scheduleTextScaler,
+            textDirection: textDirection,
+            theme: theme,
+          );
+        }).fold<double>(0, (maxHeight, weekHeight) {
+          return weekHeight > maxHeight ? weekHeight : maxHeight;
+        });
+    return (measuredHeight + scheduleGridHeightSlack)
+        .clamp(1, double.infinity)
+        .toDouble();
+  }
+
   ScheduleRefreshWarning _warningForPinnedSchedule(Schedule? schedule) {
     if (schedule?.isStale ?? false) {
       return ScheduleRefreshWarning.staleCache;
@@ -265,6 +298,7 @@ class _SchedulePageState extends ConsumerState<SchedulePage>
         : const AsyncValue<Schedule?>.data(null);
     final authState = ref.watch(authControllerProvider);
     final currentSchedule = widget.schedule ?? scheduleState.valueOrNull;
+    final scheduleTextScaler = _scheduleTextScaler(context);
     final refreshWarning = widget.schedule == null
         ? ref.watch(scheduleRefreshWarningProvider)
         : _warningForPinnedSchedule(widget.schedule);
@@ -372,11 +406,16 @@ class _SchedulePageState extends ConsumerState<SchedulePage>
                     child: ListView(
                       padding: const EdgeInsets.fromLTRB(10, 6, 10, 14),
                       children: [
-                        _CompactTopBar(
-                          selectedWeek: _selectedWeek,
-                          currentWeek: currentWeek,
-                          controller: _weekStripController,
-                          onWeekTap: _jumpToWeek,
+                        MediaQuery(
+                          data: MediaQuery.of(
+                            context,
+                          ).copyWith(textScaler: scheduleTextScaler),
+                          child: _CompactTopBar(
+                            selectedWeek: _selectedWeek,
+                            currentWeek: currentWeek,
+                            controller: _weekStripController,
+                            onWeekTap: _jumpToWeek,
+                          ),
                         ),
                         const SizedBox(height: 8),
                         if (_isManualRefreshing)
@@ -419,7 +458,10 @@ class _SchedulePageState extends ConsumerState<SchedulePage>
                           ),
                         SizedBox(
                           key: const ValueKey('schedule-swipe-area'),
-                          height: 720,
+                          height: _scheduleSwipeHeight(
+                            context,
+                            currentSchedule,
+                          ),
                           child: PageView.builder(
                             controller: _pageController,
                             onPageChanged: (index) {
@@ -453,13 +495,18 @@ class _SchedulePageState extends ConsumerState<SchedulePage>
                                     1 - distance,
                                   )!;
 
-                                  return Opacity(
-                                    opacity: opacity,
-                                    child: ScheduleGrid(
-                                      key: ValueKey('schedule-week-$week'),
-                                      schedule: weekSchedule,
-                                      weekStartDate: _weekStartForWeek(week),
-                                      borderRadius: borderRadius,
+                                  return MediaQuery(
+                                    data: MediaQuery.of(
+                                      context,
+                                    ).copyWith(textScaler: scheduleTextScaler),
+                                    child: Opacity(
+                                      opacity: opacity,
+                                      child: ScheduleGrid(
+                                        key: ValueKey('schedule-week-$week'),
+                                        schedule: weekSchedule,
+                                        weekStartDate: _weekStartForWeek(week),
+                                        borderRadius: borderRadius,
+                                      ),
                                     ),
                                   );
                                 },
@@ -767,55 +814,58 @@ class _WeekTile extends StatelessWidget {
               : null,
         ),
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              '${start.month}.${start.day}-${end.month}.${end.day}',
-              style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                color: titleColor,
-                fontWeight: FontWeight.w700,
-                fontSize: 10,
-              ),
-            ),
-            const SizedBox(height: 5),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  '第$week周',
-                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    color: valueColor,
-                    fontWeight: FontWeight.w900,
-                    fontSize: 11,
-                    height: 1,
-                  ),
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                '${start.month}.${start.day}-${end.month}.${end.day}',
+                style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                  color: titleColor,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 10,
                 ),
-                if (isCurrentWeek) ...[
-                  const SizedBox(width: 4),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 5,
-                      vertical: 2,
+              ),
+              const SizedBox(height: 5),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    '第$week周',
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      color: valueColor,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 11,
+                      height: 1,
                     ),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFFF1F2),
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: Text(
-                      '本周',
-                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: const Color(0xFFBE185D),
-                        fontWeight: FontWeight.w800,
-                        fontSize: 8,
-                        height: 1,
+                  ),
+                  if (isCurrentWeek) ...[
+                    const SizedBox(width: 4),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 5,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFF1F2),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        '本周',
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: const Color(0xFFBE185D),
+                          fontWeight: FontWeight.w800,
+                          fontSize: 8,
+                          height: 1,
+                        ),
                       ),
                     ),
-                  ),
+                  ],
                 ],
-              ],
-            ),
-          ],
+              ),
+            ],
+          ),
         ),
       ),
     );

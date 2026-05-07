@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../schedule/debug/debug_schedule.dart';
+import '../../schedule/pages/schedule_page.dart';
 import '../controllers/auth_controller.dart';
 
 class LoginPage extends ConsumerStatefulWidget {
@@ -133,6 +135,20 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                                   : () async {
                                       if (!(_formKey.currentState?.validate() ??
                                           false)) {
+                                        return;
+                                      }
+
+                                      if (_usernameController.text == 'debug' &&
+                                          _passwordController.text == 'debug') {
+                                        await Navigator.of(context).push(
+                                          MaterialPageRoute(
+                                            builder: (_) => SchedulePage(
+                                              schedule:
+                                                  debugLongContentSchedule,
+                                              initialDate: DateTime(2026, 3, 2),
+                                            ),
+                                          ),
+                                        );
                                         return;
                                       }
 
