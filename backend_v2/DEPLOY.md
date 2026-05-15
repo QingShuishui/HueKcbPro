@@ -116,8 +116,8 @@ The API container mounts:
 ## 4. Verify
 
 ```bash
-curl http://127.0.0.1:8000/health/live
-curl http://127.0.0.1:8000/health/ready
+curl http://127.0.0.1:2581/health/live
+curl http://127.0.0.1:2581/health/ready
 ```
 
 Expected:

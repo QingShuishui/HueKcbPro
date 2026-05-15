@@ -1,7 +1,5 @@
 # HueKcbPro
 
-[English](./README.md) | [简体中文](./README.zh-CN.md)
-
 HueKcbPro is a timetable system built for Hubei University of Education workflows, with a native Flutter client and a production-oriented FastAPI backend. The project focuses on fast schedule access, resilient cached data handling, and a delivery path that is practical for real Android releases and backend operations.
 
 ## Download

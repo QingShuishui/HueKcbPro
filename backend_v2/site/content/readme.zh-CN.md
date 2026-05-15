@@ -1,7 +1,5 @@
 # HueKcbPro
 
-[English](./README.md) | [简体中文](./README.zh-CN.md)
-
 HueKcbPro 是一个面向湖北第二师范学院课表场景的课表系统，包含原生 Flutter 客户端和面向部署的 FastAPI 后端。这个项目重点解决的是课表访问速度、缓存兜底可用性，以及 Android 发布与后端部署的工程化落地。
 
 ## 下载

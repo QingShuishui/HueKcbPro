@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#F472B6" />
+  <title data-i18n="meta.title">HUE 课程表 Pro · 湖北第二师范学院专属课表客户端</title>
+  <meta name="description" data-i18n-attr="content:meta.description"
+        content="HUE 课程表 Pro 是为湖北第二师范学院（Hubei University of Education）学生打造的原生 Flutter 课表应用，支持缓存兜底、离线访问和工程化发布。" />
+  <meta property="og:title" content="HUE 课程表 Pro · 湖北第二师范学院" />
+  <meta property="og:description" content="湖北第二师范学院（HUE）专属，实时更新课程安排的课表客户端。" />
+  <meta property="og:type" content="website" />
+  <meta property="og:image" content="/assets/logo.png" />
+  <link rel="icon" href="/favicon.png" type="image/png" />
+  <link rel="apple-touch-icon" href="/assets/logo.png" />
+  <link rel="stylesheet" href="/css/style.css?v=20260515-readme-only" />
+</head>
+<body>
+  <a class="skip-link" href="#main" data-i18n="nav.skip">跳到主要内容</a>
+
+  <header class="mobile-header" aria-label="移动端导航" data-i18n-attr="aria-label:nav.mobileAria">
+    <a class="mobile-header__logo-link" href="#home" data-page-link="home" aria-label="HUE 课程表 Pro" data-i18n-attr="aria-label:meta.title">
+      <img src="/assets/logo.png" alt="HUE 课程表 Pro" class="mobile-header__logo" data-i18n-attr="alt:meta.title" />
+      <span class="mobile-header__title" data-i18n="brand.short">HUE课程表</span>
+    </a>
+    <button class="menu-toggle" id="mobile-menu-toggle" type="button" aria-expanded="false" aria-label="打开菜单" data-i18n-attr="aria-label:nav.openMenuAria">
+      <span class="line line-top" aria-hidden="true"></span>
+      <span class="line line-middle" aria-hidden="true"></span>
+      <span class="line line-bottom" aria-hidden="true"></span>
+    </button>
+  </header>
+
+  <div class="mobile-menu" id="mobile-menu" aria-hidden="true">
+    <div class="mobile-menu__header">
+      <a class="mobile-menu__brand" href="#home" data-page-link="home" aria-label="HUE 课程表 Pro" data-i18n-attr="aria-label:meta.title">
+        <img src="/assets/logo.png" alt="HUE 课程表 Pro" class="mobile-menu__brand-logo" data-i18n-attr="alt:meta.title" />
+        <span class="mobile-menu__brand-title" data-i18n="brand.short">HUE课程表</span>
+      </a>
+      <button class="mobile-menu__close" id="mobile-menu-close" type="button" aria-label="关闭菜单" data-i18n-attr="aria-label:nav.closeMenuAria">
+        <span class="mobile-menu__close-line mobile-menu__close-line--first" aria-hidden="true"></span>
+        <span class="mobile-menu__close-line mobile-menu__close-line--second" aria-hidden="true"></span>
+      </button>
+    </div>
+    <div class="mobile-menu__scroll-container">
+      <div class="mobile-menu__container">
+        <div class="mobile-menu__item">
+          <a class="mobile-menu__primary" href="#home" data-page-link="home">
+            <span class="mobile-menu__primary-text" data-i18n="nav.home">首页</span>
+          </a>
+        </div>
+        <div class="mobile-menu__item mobile-menu__item--downloads" id="mobile-download-item">
+          <button type="button" class="mobile-menu__primary" id="mobile-download-toggle" aria-expanded="false">
+            <span class="mobile-menu__primary-text" data-i18n="nav.download">产品下载</span>
+            <span class="mobile-menu__arrow" aria-hidden="true"></span>
+          </button>
+          <div class="mobile-menu__secondary-container">
+            <a class="mobile-menu__secondary" data-download-platform="android" href="https://github.com/QingShuishui/HueKcbPro/releases/latest" target="_blank" rel="noopener">
+              <span class="mobile-menu__secondary-text" data-i18n="platforms.android">Android</span>
+            </a>
+            <a class="mobile-menu__secondary" data-download-platform="ios" href="https://afdian.com/a/MinePixel" target="_blank" rel="noopener">
+              <span class="mobile-menu__secondary-text" data-i18n="platforms.ios">iOS</span>
+            </a>
+            <a class="mobile-menu__secondary" data-download-platform="web" href="https://kcb.mc91.cn/" target="_blank" rel="noopener">
+              <span class="mobile-menu__secondary-text" data-i18n="platforms.web">Web</span>
+            </a>
+          </div>
+        </div>
+        <div class="mobile-menu__item">
+          <a class="mobile-menu__primary" href="#about" data-page-link="about">
+            <span class="mobile-menu__primary-text" data-i18n="nav.features">产品介绍</span>
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <nav class="nav" aria-label="主导航" data-i18n-attr="aria-label:nav.mainAria">
+    <span class="nav__spacer nav__spacer--left" aria-hidden="true"></span>
+    <a class="nav__brand" href="#home" data-page-link="home" aria-label="HUE 课程表 Pro" data-i18n-attr="aria-label:meta.title">
+      <img src="/assets/logo.png" alt="HUE 课程表 Pro" class="nav__logo" data-i18n-attr="alt:meta.title" />
+      <span class="nav__title" data-i18n="brand.short">HUE课程表</span>
+    </a>
+    <span class="nav__spacer nav__spacer--menu" aria-hidden="true"></span>
+    <ul class="nav__links">
+      <li><a href="#home" class="nav__link--active" data-page-link="home" data-i18n="nav.home">首页</a></li>
+      <li class="nav__item nav__item--dropdown" id="nav-download-item">
+        <button type="button" class="nav__dropdown-trigger" id="nav-download-trigger" aria-haspopup="menu" aria-expanded="false">
+          <span class="nav__dropdown-trigger-label" data-i18n="nav.download">产品下载</span>
+          <span class="nav__dropdown-trigger-arrow" aria-hidden="true">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 6L8 11L13 6" />
+            </svg>
+          </span>
+        </button>
+        <div class="nav__dropdown" id="nav-download-menu" aria-label="产品下载" aria-hidden="true">
+          <div class="nav__dropdown-content">
+            <div class="nav__dropdown-platforms">
+              <a class="nav__dropdown-platform nav__dropdown-platform--android nav__dropdown-platform--active" data-download-platform="android" href="https://github.com/QingShuishui/HueKcbPro/releases/latest" target="_blank" rel="noopener">
+                <span class="nav__dropdown-platform-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M17.523 15.341a1.143 1.143 0 110-2.286 1.143 1.143 0 010 2.286m-11.046 0a1.143 1.143 0 110-2.286 1.143 1.143 0 010 2.286m11.456-6.235l2.282-3.953a.476.476 0 00-.823-.476l-2.31 4.003A14.218 14.218 0 0012 7.428c-1.842 0-3.585.39-5.082 1.252L4.608 4.677a.476.476 0 00-.823.476L6.067 9.106C2.92 10.831.78 13.937.476 17.524h23.048c-.304-3.587-2.444-6.693-5.591-8.418" />
+                  </svg>
+                </span>
+                <span data-i18n="platforms.android">Android</span>
+              </a>
+              <a class="nav__dropdown-platform nav__dropdown-platform--ios" data-download-platform="ios" href="https://afdian.com/a/MinePixel" target="_blank" rel="noopener">
+                <span class="nav__dropdown-platform-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M16.365 1.43c0 1.14-.42 2.12-1.25 2.94-.92.9-1.92 1.42-3.02 1.34-.13-1.09.34-2.13 1.18-3 .9-.92 2.08-1.46 3.09-1.28zm3.2 16.93c-.57 1.29-.84 1.86-1.58 3-.98 1.5-2.37 3.37-4.08 3.39-1.52.02-1.91-.98-3.98-.97-2.06.01-2.49 1-4.01.98-1.71-.02-3.02-1.7-4-3.2-2.74-4.2-3.03-9.13-1.34-11.75 1.2-1.86 3.1-2.95 4.88-2.95 1.82 0 2.96 1 4.46 1 1.46 0 2.35-1 4.45-1 1.59 0 3.27.87 4.47 2.37-3.93 2.16-3.29 7.77.72 9.13z" />
+                  </svg>
+                </span>
+                <span data-i18n="platforms.ios">iOS</span>
+              </a>
+              <a class="nav__dropdown-platform nav__dropdown-platform--web" data-download-platform="web" href="https://kcb.mc91.cn/" target="_blank" rel="noopener">
+                <span class="nav__dropdown-platform-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10" />
+                    <path d="M2 12h20" />
+                    <path d="M12 2a15.3 15.3 0 010 20" />
+                    <path d="M12 2a15.3 15.3 0 000 20" />
+                  </svg>
+                </span>
+                <span data-i18n="platforms.web">Web</span>
+              </a>
+            </div>
+            <div class="nav__dropdown-details" aria-hidden="true">
+              <div class="nav__dropdown-detail nav__dropdown-detail--android">
+                <h3 data-i18n="downloadMenu.androidTitle">下载Android版</h3>
+                <a class="nav__dropdown-detail-link" data-download-detail-platform="android" href="https://github.com/QingShuishui/HueKcbPro/releases/latest" target="_blank" rel="noopener">
+                  <span class="nav__dropdown-detail-link-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M12 3v12" />
+                      <path d="M7 10l5 5 5-5" />
+                      <path d="M5 21h14" />
+                    </svg>
+                  </span>
+                  <span class="nav__dropdown-detail-link-text">
+                    <span class="nav__dropdown-detail-link-main" data-i18n="downloadMenu.androidMain">64 位版本下载</span>
+                    <span class="nav__dropdown-detail-link-note" data-i18n="downloadMenu.androidNote">适合安卓大部分手机设备</span>
+                  </span>
+                </a>
+              </div>
+              <div class="nav__dropdown-detail nav__dropdown-detail--ios">
+                <h3 data-i18n="downloadMenu.iosTitle">iOS 待上架</h3>
+                <a class="nav__dropdown-detail-link" data-download-detail-platform="ios" href="https://afdian.com/a/MinePixel" target="_blank" rel="noopener">
+                  <span class="nav__dropdown-detail-link-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M7 17L17 7" />
+                      <path d="M9 7h8v8" />
+                      <path d="M5 5v14h14" />
+                    </svg>
+                  </span>
+                  <span class="nav__dropdown-detail-link-text">
+                    <span class="nav__dropdown-detail-link-main" data-i18n="downloadMenu.iosMain">众筹链接</span>
+                    <span class="nav__dropdown-detail-link-note" data-i18n="downloadMenu.iosNote">支持 iOS 上架准备</span>
+                  </span>
+                </a>
+              </div>
+              <div class="nav__dropdown-detail nav__dropdown-detail--web">
+                <h3 data-i18n="downloadMenu.webTitle">Web 版本</h3>
+                <a class="nav__dropdown-detail-link" data-download-detail-platform="web" href="https://kcb.mc91.cn/" target="_blank" rel="noopener">
+                  <span class="nav__dropdown-detail-link-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+                      <circle cx="12" cy="12" r="9" />
+                      <path d="M3 12h18" />
+                      <path d="M12 3a14 14 0 010 18" />
+                      <path d="M12 3a14 14 0 000 18" />
+                    </svg>
+                  </span>
+                  <span class="nav__dropdown-detail-link-text">
+                    <span class="nav__dropdown-detail-link-main" data-i18n="downloadMenu.webMain">Web 版本链接</span>
+                    <span class="nav__dropdown-detail-link-note" data-i18n="downloadMenu.webNote">在线打开课程表</span>
+                  </span>
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </li>
+      <li><a href="#about" data-page-link="about" data-i18n="nav.features">产品介绍</a></li>
+    </ul>
+    <div class="nav__actions">
+      <button type="button" class="lang-switch" id="lang-switch"
+              aria-label="Switch language" data-i18n-attr="aria-label:nav.langAria">
+        <span class="lang-switch__current" id="lang-current">EN</span>
+      </button>
+      <a class="btn btn--ghost btn--sm" href="https://github.com/QingShuishui/HueKcbPro"
+         target="_blank" rel="noopener" data-i18n="nav.github">GitHub</a>
+    </div>
+  </nav>
+  <div class="nav-menu-mask" id="nav-menu-mask" aria-hidden="true"></div>
+
+  <main id="main">
+    <header class="hero page-section page-section--active" id="home" data-page-section="home">
+      <div class="hero__motion-bg" aria-hidden="true"></div>
+      <video class="hero__video-bg" autoplay muted loop playsinline webkit-playsinline="true"
+             preload="metadata" aria-hidden="true">
+        <source src="/assets/video-bg.mp4" type="video/mp4" />
+      </video>
+      <div class="hero__animation-layer" aria-hidden="true">
+        <div class="cursor-glow-container">
+          <div class="cursor-glow main" id="cursor-glow"></div>
+        </div>
+        <div class="raster-overlay"></div>
+        <div class="hidden-icons-container" id="hidden-icons">
+          <div class="hidden-icon-group" data-x="0.111111" data-y="0.333333" data-icon-left="65" data-icon-top="72">
+            <div class="glow-bg"></div>
+            <div class="icon-placeholder">
+              <img class="hidden-icon-img is-left-side" src="/assets/qq/pd.png" alt="频道" />
+            </div>
+          </div>
+          <div class="hidden-icon-group" data-x="0.3" data-y="0.25" data-icon-left="6" data-icon-top="6">
+            <div class="glow-bg"></div>
+            <div class="icon-placeholder">
+              <img class="hidden-icon-img is-left-side" src="/assets/qq/AI.png" alt="AI" />
+            </div>
+          </div>
+          <div class="hidden-icon-group" data-x="0.2" data-y="0.6" data-icon-left="9" data-icon-top="9">
+            <div class="glow-bg"></div>
+            <div class="icon-placeholder">
+              <img class="hidden-icon-img is-left-side" src="/assets/qq/qp.png" alt="Q泡" />
+            </div>
+          </div>
+          <div class="hidden-icon-group" data-x="0.1" data-y="0.8" data-icon-left="14" data-icon-top="16">
+            <div class="glow-bg"></div>
+            <div class="icon-placeholder">
+              <img class="hidden-icon-img is-left-side" src="/assets/qq/qzone.png" alt="空间" />
+            </div>
+          </div>
+          <div class="hidden-icon-group" data-x="0.7" data-y="0.25" data-icon-left="14" data-icon-top="20">
+            <div class="glow-bg"></div>
+            <div class="icon-placeholder">
+              <img class="hidden-icon-img" src="/assets/qq/shanchuan.png" alt="闪传" />
+            </div>
+          </div>
+          <div class="hidden-icon-group" data-x="0.888889" data-y="0.333333" data-icon-left="15" data-icon-top="20">
+            <div class="glow-bg"></div>
+            <div class="icon-placeholder">
+              <img class="hidden-icon-img" src="/assets/qq/wendang.png" alt="文档" />
+            </div>
+          </div>
+          <div class="hidden-icon-group" data-x="0.8" data-y="0.6" data-icon-left="7" data-icon-top="6">
+            <div class="glow-bg"></div>
+            <div class="icon-placeholder">
+              <img class="hidden-icon-img" src="/assets/qq/emoticon.png" alt="表情" />
+            </div>
+          </div>
+          <div class="hidden-icon-group" data-x="0.9" data-y="0.8" data-icon-left="15" data-icon-top="7">
+            <div class="glow-bg"></div>
+            <div class="icon-placeholder">
+              <img class="hidden-icon-img" src="/assets/qq/qqvip.png" alt="会员" />
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="hero__shade" aria-hidden="true"></div>
+      <div class="hero__content">
+        <div class="hero__mark" aria-label="HUE 课程表 Pro" data-i18n-attr="aria-label:meta.title">
+          <div class="hero__title-layer hero__title-layer--glow" aria-hidden="true">
+            <img src="/assets/logo.png" alt="" class="hero__logo" />
+            <span class="hero__title-copy" data-i18n="hero.tagline">HUE课程表</span>
+          </div>
+          <h1 class="hero__title-layer hero__title-layer--front">
+            <img src="/assets/logo.png" alt="" class="hero__logo" />
+            <span class="hero__title-copy" data-i18n="hero.tagline">HUE课程表</span>
+          </h1>
+        </div>
+        <p class="hero__sub" data-i18n="hero.sub">
+          湖北第二师范学院专属，实时更新课程安排的课表客户端
+        </p>
+
+        <a class="hero__cta" id="hero-download"
+           href="https://github.com/QingShuishui/HueKcbPro/releases/latest"
+           target="_blank" rel="noopener">
+          <svg class="hero__cta-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+               width="22" height="22" aria-hidden="true">
+            <circle cx="12" cy="12" r="10" />
+            <path d="M8 12l4 4 4-4" />
+            <path d="M12 8v8" />
+          </svg>
+          <span id="hero-cta-text" data-i18n="hero.ctaLoading">加载版本信息中…</span>
+        </a>
+
+        <p class="hero__version" id="hero-version-meta" data-i18n="hero.versionLoading">
+          正在从后端获取版本信息…
+        </p>
+
+      </div>
+      <ul class="hero__platforms" aria-label="Supported platforms">
+        <li>
+          <a class="platform-chip platform-chip--active" id="platform-android" data-download-platform="android" href="https://github.com/QingShuishui/HueKcbPro/releases/latest" target="_blank" rel="noopener">
+            <svg class="platform-chip__icon" viewBox="0 0 24 24" fill="currentColor"
+                 width="18" height="18" aria-hidden="true">
+              <path d="M17.523 15.341a1.143 1.143 0 110-2.286 1.143 1.143 0 010 2.286m-11.046 0a1.143 1.143 0 110-2.286 1.143 1.143 0 010 2.286m11.456-6.235l2.282-3.953a.476.476 0 00-.823-.476l-2.31 4.003A14.218 14.218 0 0012 7.428c-1.842 0-3.585.39-5.082 1.252L4.608 4.677a.476.476 0 00-.823.476L6.067 9.106C2.92 10.831.78 13.937.476 17.524H23.524c-.304-3.587-2.444-6.693-5.591-8.418" />
+            </svg>
+            <span data-i18n="platforms.android">Android</span>
+          </a>
+        </li>
+        <li>
+          <a class="platform-chip platform-chip--planned" data-download-platform="ios" href="https://afdian.com/a/MinePixel" target="_blank" rel="noopener"
+             data-i18n-attr="title:platforms.iosTitle" title="iOS 客户端开发中">
+            <svg class="platform-chip__icon" viewBox="0 0 24 24" fill="currentColor"
+                 width="18" height="18" aria-hidden="true">
+              <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.3-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z" />
+            </svg>
+            <span data-i18n="platforms.ios">iOS</span>
+            <span class="platform-chip__hint" data-i18n="platforms.planned">开发中</span>
+          </a>
+        </li>
+        <li>
+          <a class="platform-chip platform-chip--planned" data-download-platform="web" href="https://kcb.mc91.cn/" target="_blank" rel="noopener"
+             data-i18n-attr="title:platforms.webTitle" title="Web 版计划中">
+            <svg class="platform-chip__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                 width="18" height="18" aria-hidden="true">
+              <circle cx="12" cy="12" r="10" />
+              <path d="M2 12h20M12 2a15.3 15.3 0 010 20M12 2a15.3 15.3 0 000 20" />
+            </svg>
+            <span data-i18n="platforms.web">Web</span>
+            <span class="platform-chip__hint" data-i18n="platforms.coming">计划中</span>
+          </a>
+        </li>
+      </ul>
+    </header>
+
+    <section class="section page-section" id="about" data-page-section="about">
+      <div class="about-markdown markdown-body" id="readme-markdown">
+        <p data-i18n="features.markdownLoading">正在加载项目 README...</p>
+      </div>
+    </section>
+
+    <section class="section section--alt page-section" id="download" data-page-section="download">
+      <div class="section__header">
+        <h2 data-i18n="download.title">下载与更新</h2>
+        <p data-i18n="download.subtitle">所有版本信息来自项目自有后端</p>
+      </div>
+      <div class="download-card" id="download-card">
+        <div class="download-card__head">
+          <div class="download-card__title">
+            <h3>
+              <span data-i18n="download.android">Android 安装包</span>
+              <span class="badge" id="download-version">—</span>
+            </h3>
+            <p class="download-card__meta" id="download-meta" data-i18n="download.metaLoading">
+              正在从后端获取版本信息…
+            </p>
+          </div>
+          <div class="download-card__actions">
+            <a class="btn btn--primary" id="download-primary"
+               href="https://github.com/QingShuishui/HueKcbPro/releases/latest"
+               target="_blank" rel="noopener">
+              <span data-i18n="download.primaryBtn">下载 APK</span>
+            </a>
+            <a class="btn btn--ghost btn--sm" id="download-fallback"
+               href="https://github.com/QingShuishui/HueKcbPro/releases"
+               target="_blank" rel="noopener" data-i18n="download.githubBtn">
+              GitHub Releases
+            </a>
+          </div>
+        </div>
+        <dl class="download-card__detail">
+          <div>
+            <dt data-i18n="download.detailBuild">构建号</dt>
+            <dd id="download-build">—</dd>
+          </div>
+          <div>
+            <dt data-i18n="download.detailPublished">发布时间</dt>
+            <dd id="download-published">—</dd>
+          </div>
+          <div>
+            <dt data-i18n="download.detailSha">SHA-256</dt>
+            <dd id="download-sha" class="mono">—</dd>
+          </div>
+        </dl>
+        <details class="download-card__notes" id="download-notes-wrap" open>
+          <summary data-i18n="download.notesTitle">更新说明</summary>
+          <pre id="download-notes" data-i18n="download.notesLoading">正在加载更新说明…</pre>
+        </details>
+        <p class="download-card__hint" data-i18n="download.hint">
+          首次安装时 Android 会提示"未知来源"，按系统引导授权"安装未知应用"即可。
+        </p>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="footer">
+    <div class="footer__inner">
+      <div class="footer__col">
+        <img src="/assets/logo.png" alt="" class="footer__logo" />
+        <p class="footer__brand">HUE 课程表 Pro</p>
+        <p class="footer__brand-sub" data-i18n="footer.school">湖北第二师范学院 · Hubei University of Education</p>
+      </div>
+      <div class="footer__col">
+        <h4 data-i18n="footer.linksTitle">资源</h4>
+        <ul>
+          <li><a href="https://github.com/QingShuishui/HueKcbPro" target="_blank" rel="noopener">GitHub</a></li>
+          <li><a href="https://github.com/QingShuishui/HueKcbPro/releases" target="_blank" rel="noopener" data-i18n="footer.releases">所有版本</a></li>
+          <li><a href="https://github.com/QingShuishui/HueKcbPro/issues" target="_blank" rel="noopener" data-i18n="footer.issues">提交问题</a></li>
+        </ul>
+      </div>
+      <div class="footer__col">
+        <h4 data-i18n="footer.legalTitle">法律</h4>
+        <ul>
+          <li><a href="https://www.gnu.org/licenses/gpl-3.0.html" target="_blank" rel="noopener">GPL-3.0 License</a></li>
+          <li><span data-i18n="footer.disclaimer">非学校官方项目</span></li>
+        </ul>
+      </div>
+    </div>
+    <p class="footer__copy">
+      © <span id="year">2026</span> HueKcbPro ·
+      <span data-i18n="footer.copyHint">使用即代表你同意 GPL-3.0 与免责声明</span>
+    </p>
+  </footer>
+
+  <script type="module" src="/js/app.js?v=20260515-readme-only"></script>
+</body>
+</html>

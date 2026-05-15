@@ -1,6 +1,9 @@
+from pathlib import Path
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
+from fastapi.staticfiles import StaticFiles
 
 import app.models  # noqa: F401
 from app.core.db import engine
@@ -65,6 +68,10 @@ def create_app() -> FastAPI:
             "database": database_status,
             "redis": redis_status,
         }
+
+    site_dir = Path(__file__).resolve().parents[1] / "site"
+    if site_dir.is_dir():
+        app.mount("/", StaticFiles(directory=site_dir, html=True), name="site")
 
     return app
 

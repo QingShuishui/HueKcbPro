@@ -26,9 +26,9 @@ alembic upgrade head
 ## Verify
 
 ```bash
-curl http://127.0.0.1:8000/health/live
-curl http://127.0.0.1:8000/health/ready
-curl http://127.0.0.1:8000/api/v1/app/update/android
+curl http://127.0.0.1:2581/health/live
+curl http://127.0.0.1:2581/health/ready
+curl http://127.0.0.1:2581/api/v1/app/update/android
 ```
 
 The `/health/ready` response should include both `database` and `redis` fields.
