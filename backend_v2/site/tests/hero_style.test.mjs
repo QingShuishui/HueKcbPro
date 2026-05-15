@@ -483,7 +483,7 @@ assert.match(strings, /'hero\.ctaAndroid':\s*'Android版下载'/);
 assert.match(strings, /'features\.markdownLoading':\s*'正在加载项目 README\.\.\.'/);
 assert.match(strings, /'features\.markdownError':\s*'README 暂时加载失败，请稍后刷新重试。'/);
 assert.match(strings, /'hero\.ctaWeb':\s*'Web在线版本'/);
-assert.match(strings, /'hero\.ctaIos':\s*'待众筹上线'/);
+assert.match(strings, /'hero\.ctaIos':\s*'iOS版待众筹上线'/);
 assert.match(strings, /'hero\.ctaAndroid':\s*'Download for Android'/);
 assert.match(strings, /'hero\.ctaWeb':\s*'Web Online'/);
 assert.match(strings, /'hero\.ctaIos':\s*'Crowdfunding for iOS'/);

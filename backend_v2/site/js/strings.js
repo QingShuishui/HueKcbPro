@@ -25,7 +25,7 @@ export const strings = {
     'hero.ctaError': '前往 GitHub Releases',
     'hero.ctaAndroid': 'Android版下载',
     'hero.ctaWeb': 'Web在线版本',
-    'hero.ctaIos': '待众筹上线',
+    'hero.ctaIos': 'iOS版待众筹上线',
     'hero.versionLoading': '正在从后端获取版本信息…',
     'hero.versionReady': 'v {version} · Build {build} · {published}',
     'hero.versionError': '暂时无法连接后端，请前往 GitHub Releases',
