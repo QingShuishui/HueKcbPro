@@ -46,8 +46,7 @@ def latest_android_release() -> dict:
     return read_latest_android_release()
 
 
-@router.get("/downloads/{filename}")
-def download_android_release(filename: str) -> FileResponse:
+def _download_android_release_response(filename: str) -> FileResponse:
     file_path = (DOWNLOADS_DIR / filename).resolve()
     downloads_root = DOWNLOADS_DIR.resolve()
     if downloads_root not in file_path.parents or not file_path.exists():
@@ -61,3 +60,13 @@ def download_android_release(filename: str) -> FileResponse:
         media_type="application/vnd.android.package-archive",
         filename=file_path.name,
     )
+
+
+@router.get("/downloads/{filename}")
+def download_android_release(filename: str) -> FileResponse:
+    return _download_android_release_response(filename)
+
+
+@router.head("/downloads/{filename}")
+def head_android_release(filename: str) -> FileResponse:
+    return _download_android_release_response(filename)

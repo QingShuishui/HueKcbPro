@@ -60,4 +60,21 @@ def test_android_download_endpoint_serves_apk(monkeypatch, tmp_path):
     response = client.get("/api/v1/app/update/downloads/HueKcbPro-1.0.2+12.apk")
 
     assert response.status_code == 200
+    assert response.headers["content-length"] == str(len(b"apk-binary"))
+    assert "content-encoding" not in response.headers
     assert response.content == b"apk-binary"
+
+
+def test_android_download_endpoint_supports_head_for_file_info(monkeypatch, tmp_path):
+    from app.modules.updates import router as updates_router
+
+    apk = tmp_path / "HueKcbPro-1.0.2+12.apk"
+    apk.write_bytes(b"apk-binary")
+    monkeypatch.setattr(updates_router, "DOWNLOADS_DIR", tmp_path)
+
+    client = TestClient(create_app())
+    response = client.head("/api/v1/app/update/downloads/HueKcbPro-1.0.2+12.apk")
+
+    assert response.status_code == 200
+    assert response.headers["content-length"] == str(len(b"apk-binary"))
+    assert "content-encoding" not in response.headers

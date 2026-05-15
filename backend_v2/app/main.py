@@ -2,7 +2,6 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
 
 import app.models  # noqa: F401
@@ -13,6 +12,7 @@ from app.middleware.error_handler import (
     invalid_credentials_exception_handler,
     unhandled_exception_handler,
 )
+from app.middleware.conditional_gzip import ConditionalGZipMiddleware
 from app.middleware.request_id import RequestIdMiddleware
 from app.modules.connectors.errors import InvalidCredentialsError
 from app.modules.auth.router import router as auth_router
@@ -28,7 +28,11 @@ def create_app() -> FastAPI:
     Base.metadata.create_all(engine)
     app = FastAPI(title=settings.app_name)
     app.add_middleware(RequestIdMiddleware)
-    app.add_middleware(GZipMiddleware, minimum_size=500)
+    app.add_middleware(
+        ConditionalGZipMiddleware,
+        minimum_size=500,
+        excluded_path_prefixes=("/api/v1/app/update/downloads/",),
+    )
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],
