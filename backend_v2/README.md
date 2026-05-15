@@ -33,6 +33,14 @@ curl http://127.0.0.1:2581/api/v1/app/update/android
 
 The `/health/ready` response should include both `database` and `redis` fields.
 
+Admin monitoring endpoints require `X-Admin-Token` matching `ADMIN_TOKEN`:
+
+```bash
+curl -H "X-Admin-Token: $ADMIN_TOKEN" http://127.0.0.1:2581/api/v1/admin/monitor/summary
+curl -H "X-Admin-Token: $ADMIN_TOKEN" http://127.0.0.1:2581/api/v1/admin/monitor/users
+curl -H "X-Admin-Token: $ADMIN_TOKEN" http://127.0.0.1:2581/api/v1/admin/monitor/schedule-logs
+```
+
 ## Release Deploy
 
 For pull-and-run deployment using published images, see:

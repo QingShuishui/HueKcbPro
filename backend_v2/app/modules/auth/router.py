@@ -16,7 +16,7 @@ def login(payload: LoginRequest) -> dict:
 @router.post("/refresh")
 def refresh(payload: RefreshRequest) -> dict:
     try:
-        return service.refresh_session(payload.refresh_token)
+        return service.refresh_session(payload)
     except ValueError:
         return JSONResponse(
             status_code=status.HTTP_401_UNAUTHORIZED,

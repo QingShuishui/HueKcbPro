@@ -16,6 +16,7 @@ from app.middleware.error_handler import (
 from app.middleware.request_id import RequestIdMiddleware
 from app.modules.connectors.errors import InvalidCredentialsError
 from app.modules.auth.router import router as auth_router
+from app.modules.admin.monitoring import router as admin_monitoring_router
 from app.modules.credentials.router import router as credentials_router
 from app.modules.schedule.cache import redis_client
 from app.modules.schedule.router import router as schedule_router
@@ -40,6 +41,7 @@ def create_app() -> FastAPI:
     )
     app.add_exception_handler(Exception, unhandled_exception_handler)
     app.include_router(auth_router)
+    app.include_router(admin_monitoring_router)
     app.include_router(credentials_router)
     app.include_router(schedule_router)
     app.include_router(updates_router)

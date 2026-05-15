@@ -1,4 +1,5 @@
 import json
+import time
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, status
@@ -7,6 +8,7 @@ from app.core.db import SessionLocal
 from app.core.security import get_current_user_id
 from app.models.academic_binding import AcademicBinding
 from app.models.schedule_snapshot import ScheduleSnapshot
+from app.modules.admin.monitoring import record_schedule_log
 from app.modules.schedule.cache import get_cached_schedule, set_cached_schedule
 from app.modules.tasks.schedule_tasks import sync_schedule
 
@@ -87,7 +89,25 @@ def read_sync_status(user_id: int) -> dict:
 
 @router.get("/current")
 def current_schedule(user_id: int = Depends(get_current_user_id)) -> dict:
-    return read_current_schedule(user_id=user_id)
+    start = time.perf_counter()
+    try:
+        result = read_current_schedule(user_id=user_id)
+        record_schedule_log(
+            user_id=user_id,
+            action="current",
+            status="success",
+            duration_ms=int((time.perf_counter() - start) * 1000),
+        )
+        return result
+    except Exception as exc:
+        record_schedule_log(
+            user_id=user_id,
+            action="current",
+            status="error",
+            duration_ms=int((time.perf_counter() - start) * 1000),
+            error_message=str(exc)[:500],
+        )
+        raise
 
 
 @router.get("/status")
@@ -97,8 +117,15 @@ def sync_status(user_id: int = Depends(get_current_user_id)) -> dict:
 
 @router.post("/refresh", status_code=status.HTTP_202_ACCEPTED)
 def refresh_schedule(user_id: int = Depends(get_current_user_id)) -> dict:
+    start = time.perf_counter()
     with SessionLocal() as db:
         binding = db.query(AcademicBinding).filter_by(user_id=user_id).one_or_none()
         binding_id = binding.id if binding else 1
     sync_schedule.delay(binding_id=binding_id)
+    record_schedule_log(
+        user_id=user_id,
+        action="refresh",
+        status="queued",
+        duration_ms=int((time.perf_counter() - start) * 1000),
+    )
     return {"code": "SYNC_IN_PROGRESS", "status": "queued"}

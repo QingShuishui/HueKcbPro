@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HueKcbPro 后台监控</title>
+  <link rel="stylesheet" href="/css/admin.css?v=20260516-admin-monitor" />
+</head>
+<body>
+  <main class="admin-shell">
+    <section class="login-panel" id="login-panel">
+      <div>
+        <p class="eyebrow">HueKcbPro Admin</p>
+        <h1>后台监控</h1>
+      </div>
+      <form class="token-form" id="token-form">
+        <label for="admin-token">Admin Token</label>
+        <div class="token-row">
+          <input id="admin-token" name="admin-token" type="password" autocomplete="off" required />
+          <button type="submit">进入</button>
+        </div>
+        <p class="form-error" id="form-error" role="alert"></p>
+      </form>
+    </section>
+
+    <section class="dashboard" id="dashboard" hidden>
+      <header class="dashboard-header">
+        <div>
+          <p class="eyebrow">HueKcbPro Admin</p>
+          <h1>后台监控</h1>
+        </div>
+        <div class="header-actions">
+          <button type="button" id="refresh-button">刷新</button>
+          <button type="button" id="logout-button">退出</button>
+        </div>
+      </header>
+
+      <section class="metric-grid" id="metric-grid" aria-label="监控概览"></section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <h2>用户与版本</h2>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>用户ID</th>
+                <th>学号</th>
+                <th>平台</th>
+                <th>版本</th>
+                <th>Build</th>
+                <th>设备</th>
+                <th>最后登录</th>
+              </tr>
+            </thead>
+            <tbody id="users-body"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <h2>课表查询日志</h2>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>时间</th>
+                <th>学号</th>
+                <th>类型</th>
+                <th>状态</th>
+                <th>耗时</th>
+                <th>错误</th>
+              </tr>
+            </thead>
+            <tbody id="logs-body"></tbody>
+          </table>
+        </div>
+      </section>
+    </section>
+  </main>
+
+  <script type="module" src="/js/admin.js?v=20260516-admin-monitor"></script>
+</body>
+</html>

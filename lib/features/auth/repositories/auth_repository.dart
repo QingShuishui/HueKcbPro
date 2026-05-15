@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 import '../../../core/network/api_client.dart';
 import '../../../core/storage/session_storage.dart';
@@ -21,6 +22,16 @@ class AuthRepository {
   final ApiClient _apiClient;
   final SessionStorage _storage;
 
+  Future<Map<String, String>> _clientInfoPayload() async {
+    final packageInfo = await PackageInfo.fromPlatform();
+    return {
+      'device_name': 'flutter-client',
+      'platform': 'android',
+      'app_version': packageInfo.version,
+      'app_build': packageInfo.buildNumber,
+    };
+  }
+
   Future<LoginUser?> readStoredUser() => _storage.readUser();
 
   Future<bool> hasStoredRefreshToken() async {
@@ -38,7 +49,7 @@ class AuthRepository {
           'school_code': 'hue',
           'academic_username': academicUsername,
           'password': password,
-          'device_name': 'flutter-client',
+          ...await _clientInfoPayload(),
         },
       );
 
@@ -71,7 +82,7 @@ class AuthRepository {
     try {
       final response = await _apiClient.dio.post<Map<String, dynamic>>(
         '/auth/refresh',
-        data: {'refresh_token': refreshToken},
+        data: {'refresh_token': refreshToken, ...await _clientInfoPayload()},
       );
 
       final json = response.data!;
@@ -98,7 +109,7 @@ class AuthRepository {
     try {
       final response = await _apiClient.dio.post<Map<String, dynamic>>(
         '/auth/refresh',
-        data: {'refresh_token': refreshToken},
+        data: {'refresh_token': refreshToken, ...await _clientInfoPayload()},
       );
 
       final json = response.data!;

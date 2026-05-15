@@ -71,6 +71,7 @@ Required edits:
 - `DATABASE_URL`
 - `JWT_SECRET`
 - `CREDENTIAL_ENCRYPTION_KEY`
+- `ADMIN_TOKEN`
 
 For the default compose layout, `DATABASE_URL` should point to the `postgres` service host:
 
@@ -84,6 +85,7 @@ Recommended release defaults:
 APP_IMAGE=ghcr.io/qingshuishui/kcb-backend-v2
 APP_TAG=backend-v0.1.1
 DEPLOY_BASE_PATH=/opt/huekcb/releases
+ADMIN_TOKEN=replace-with-a-long-random-secret
 ```
 
 Recommended host directories:
@@ -118,6 +120,12 @@ The API container mounts:
 ```bash
 curl http://127.0.0.1:2581/health/live
 curl http://127.0.0.1:2581/health/ready
+```
+
+Verify admin monitoring with your release token:
+
+```bash
+curl -H "X-Admin-Token: $ADMIN_TOKEN" http://127.0.0.1:2581/api/v1/admin/monitor/summary
 ```
 
 Expected:

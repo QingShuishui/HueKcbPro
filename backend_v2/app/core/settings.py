@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+psycopg://postgres:postgres@localhost:5432/kcb"
     redis_url: str = "redis://localhost:6379/0"
     sentry_dsn: str = ""
+    admin_token: str = ""
 
 
 @lru_cache
