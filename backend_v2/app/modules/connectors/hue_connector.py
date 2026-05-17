@@ -15,6 +15,7 @@ from app.modules.connectors.hue_parser import parse_schedule_html
 class HUEConnector(AcademicConnector):
     connector_key = "hue"
     base_url = "https://jwxt.hue.edu.cn"
+    max_login_attempts = 3
 
     def parse_schedule_html(self, html: str) -> NormalizedSchedule:
         result = parse_schedule_html(html)
@@ -25,6 +26,18 @@ class HUEConnector(AcademicConnector):
         if ddddocr is None:
             raise RuntimeError("ddddocr is required")
 
+        last_error: InvalidCredentialsError | None = None
+        for _ in range(self.max_login_attempts):
+            try:
+                return self._fetch_schedule_once(username, password)
+            except InvalidCredentialsError as error:
+                last_error = error
+
+        if last_error is not None:
+            raise last_error
+        raise InvalidCredentialsError("invalid academic credentials")
+
+    def _fetch_schedule_once(self, username: str, password: str) -> NormalizedSchedule:
         session = requests.Session()
         session.get(self.base_url, timeout=10)
         sess_response = session.get(

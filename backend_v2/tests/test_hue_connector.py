@@ -1,6 +1,17 @@
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from app.modules.connectors.hue_connector import HUEConnector
+
+
+def _response(**kwargs):
+    defaults = {
+        "text": "",
+        "content": b"",
+        "status_code": 200,
+        "url": "https://jwxt.hue.edu.cn",
+    }
+    defaults.update(kwargs)
+    return type("R", (), defaults)()
 
 
 @patch("app.modules.connectors.hue_connector.ddddocr.DdddOcr")
@@ -55,6 +66,36 @@ def test_connector_uses_supplied_credentials(session_cls, ocr_cls):
 
     post_data = session.post.call_args.kwargs["data"]
     assert "demo_student_id" not in post_data["encoded"]
+
+
+@patch("app.modules.connectors.hue_connector.ddddocr.DdddOcr")
+@patch("app.modules.connectors.hue_connector.requests.Session")
+def test_connector_retries_transient_login_redirect_failures(session_cls, ocr_cls):
+    sessions = [Mock(), Mock(), Mock()]
+    session_cls.side_effect = sessions
+    ocr_cls.return_value.classification.return_value = "1234"
+
+    for session in sessions:
+        session.get.side_effect = [
+            _response(),
+            _response(text="abc#111"),
+            _response(content=b"img"),
+            _response(
+                text="<div id='timetableDiv'>2026春</div><table id='kbtable'></table>",
+            ),
+        ]
+
+    failed_login = _response(url="https://jwxt.hue.edu.cn/Logon.do?method=logon")
+    successful_login = _response(url="https://jwxt.hue.edu.cn/xsMain.jsp")
+    sessions[0].post.return_value = failed_login
+    sessions[1].post.return_value = failed_login
+    sessions[2].post.return_value = successful_login
+
+    result = HUEConnector().fetch_schedule("demo_student_id", "pw123")
+
+    assert result.semester_label == "2026春"
+    assert session_cls.call_count == 3
+    assert sum(session.post.call_count for session in sessions) == 3
 
 
 def test_parser_reads_fixture_into_normalized_courses():
