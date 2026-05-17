@@ -117,6 +117,25 @@ class _DelayedRefreshScheduleRepository extends ScheduleRepository {
   }
 }
 
+class _NeverUpdatedRefreshScheduleRepository extends ScheduleRepository {
+  int refreshCalls = 0;
+
+  @override
+  Future<Schedule?> readCachedSchedule() async {
+    return _oldSchedule;
+  }
+
+  @override
+  Future<Schedule> fetchCurrentSchedule() async {
+    return _oldSchedule;
+  }
+
+  @override
+  Future<void> refreshFromAcademicSystem() async {
+    refreshCalls += 1;
+  }
+}
+
 void main() {
   test('loadSchedule stores schedule in controller state', () async {
     final container = ProviderContainer(
@@ -226,6 +245,36 @@ void main() {
       expect(repository.refreshCalls, 1);
       expect(repository.fetchCallsAfterRefresh, greaterThanOrEqualTo(3));
       expect(state.value?.generatedAt, _newSchedule.generatedAt);
+    },
+  );
+
+  test(
+    'manualRefresh reports still syncing when no newer schedule arrives before timeout',
+    () async {
+      final repository = _NeverUpdatedRefreshScheduleRepository();
+      final container = ProviderContainer(
+        overrides: [
+          scheduleControllerProvider.overrideWith(
+            (ref) => ScheduleController(
+              ref,
+              repository,
+              refreshPollTimeout: const Duration(milliseconds: 120),
+              refreshPollInterval: const Duration(milliseconds: 20),
+            ),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      await container.read(scheduleControllerProvider.notifier).loadSchedule();
+      final result = await container
+          .read(scheduleControllerProvider.notifier)
+          .manualRefresh();
+
+      final state = container.read(scheduleControllerProvider);
+      expect(result, ScheduleManualRefreshResult.stillSyncing);
+      expect(repository.refreshCalls, 1);
+      expect(state.value?.generatedAt, _oldSchedule.generatedAt);
     },
   );
 

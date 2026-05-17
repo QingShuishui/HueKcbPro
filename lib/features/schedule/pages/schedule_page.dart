@@ -16,12 +16,25 @@ const _weekTileExtent = 132.0;
 const _minWeek = 1;
 const _maxWeek = 18;
 const _maxScheduleTextScale = 1.2;
+const _debugRefreshTimeout = Duration(seconds: 10);
 
 class SchedulePage extends ConsumerStatefulWidget {
-  const SchedulePage({super.key, this.schedule, this.initialDate});
+  const SchedulePage({
+    super.key,
+    this.schedule,
+    this.initialDate,
+    this.isDebugMode = false,
+    this.debugDateSelector,
+    this.debugInitialCacheAge = Duration.zero,
+    this.debugInitialRefreshDuration = Duration.zero,
+  });
 
   final Schedule? schedule;
   final DateTime? initialDate;
+  final bool isDebugMode;
+  final DebugDateSelector? debugDateSelector;
+  final Duration debugInitialCacheAge;
+  final Duration debugInitialRefreshDuration;
 
   @override
   ConsumerState<SchedulePage> createState() => _SchedulePageState();
@@ -29,9 +42,7 @@ class SchedulePage extends ConsumerStatefulWidget {
 
 class _SchedulePageState extends ConsumerState<SchedulePage>
     with WidgetsBindingObserver {
-  late final DateTime _today = _normalizeDate(
-    widget.initialDate ?? DateTime.now(),
-  );
+  late DateTime _today = _normalizeDate(widget.initialDate ?? DateTime.now());
   late int _selectedWeek = _weekForDate(_today);
   late final ScrollController _weekStripController = ScrollController(
     initialScrollOffset: (_selectedWeek - 1) * _weekTileExtent,
@@ -42,7 +53,13 @@ class _SchedulePageState extends ConsumerState<SchedulePage>
 
   bool _isManualRefreshing = false;
   bool _showRefreshSuccess = false;
+  bool _showRefreshStillSyncing = false;
   bool _autoRefreshInFlight = false;
+  late DateTime _configuredDebugDate = _today;
+  DateTime? _pendingDebugDate;
+  bool _debugDateSyncImmediately = true;
+  late Duration _debugCacheAge = widget.debugInitialCacheAge;
+  late Duration _debugRefreshDuration = widget.debugInitialRefreshDuration;
   DateTime? _lastAutoRefreshBaseline;
   int? _programmaticWeekTarget;
   ScheduleRefreshWarning? _visibleWarningPopup;
@@ -75,25 +92,73 @@ class _SchedulePageState extends ConsumerState<SchedulePage>
     }
     final currentSchedule = ref.read(scheduleControllerProvider).valueOrNull;
     if (currentSchedule != null) {
-      unawaited(_maybeAutoRefresh(currentSchedule));
+      unawaited(() async {
+        await _syncCurrentDate(followCurrentWeek: true);
+        await _maybeAutoRefresh(currentSchedule);
+      }());
     }
   }
 
   Future<void> _refreshSchedule() async {
+    await _syncCurrentDate(followCurrentWeek: true, syncPendingDebugDate: true);
+    if (!mounted) {
+      return;
+    }
     setState(() {
       _isManualRefreshing = true;
       _showRefreshSuccess = false;
+      _showRefreshStillSyncing = false;
     });
+    if (widget.isDebugMode && widget.schedule != null) {
+      final waitDuration = _debugRefreshDuration > _debugRefreshTimeout
+          ? _debugRefreshTimeout
+          : _debugRefreshDuration;
+      if (waitDuration > Duration.zero) {
+        await Future<void>.delayed(waitDuration);
+        if (!mounted) {
+          return;
+        }
+      }
+      if (_debugRefreshDuration > _debugRefreshTimeout) {
+        setState(() {
+          _isManualRefreshing = false;
+          _showRefreshStillSyncing = true;
+        });
+        unawaited(_hideRefreshStillSyncingLater());
+        return;
+      }
+      setState(() {
+        _debugCacheAge = Duration.zero;
+        _isManualRefreshing = false;
+        _showRefreshSuccess = true;
+      });
+      unawaited(_hideRefreshSuccessLater());
+      return;
+    }
     try {
       final didRefresh = await ref
           .read(scheduleControllerProvider.notifier)
           .manualRefresh();
-      if (mounted && didRefresh) {
-        setState(() {
-          _isManualRefreshing = false;
-          _showRefreshSuccess = true;
-        });
-        unawaited(_hideRefreshSuccessLater());
+      if (!mounted) {
+        return;
+      }
+      switch (didRefresh) {
+        case ScheduleManualRefreshResult.updated:
+          setState(() {
+            _isManualRefreshing = false;
+            _showRefreshSuccess = true;
+          });
+          unawaited(_hideRefreshSuccessLater());
+        case ScheduleManualRefreshResult.stillSyncing:
+          setState(() {
+            _isManualRefreshing = false;
+            _showRefreshStillSyncing = true;
+          });
+          unawaited(_hideRefreshStillSyncingLater());
+        case ScheduleManualRefreshResult.failed:
+          setState(() {
+            _isManualRefreshing = false;
+          });
       }
     } finally {
       if (mounted && _isManualRefreshing) {
@@ -114,10 +179,60 @@ class _SchedulePageState extends ConsumerState<SchedulePage>
     });
   }
 
-  DateTime _currentMoment() => widget.initialDate ?? DateTime.now();
+  Future<void> _hideRefreshStillSyncingLater() async {
+    await Future<void>.delayed(const Duration(milliseconds: 2200));
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _showRefreshStillSyncing = false;
+    });
+  }
+
+  DateTime _currentMoment({bool syncPendingDebugDate = false}) {
+    if (widget.isDebugMode) {
+      return syncPendingDebugDate
+          ? (_pendingDebugDate ?? _configuredDebugDate)
+          : _today;
+    }
+    return widget.initialDate ?? DateTime.now();
+  }
+
+  Future<void> _syncCurrentDate({
+    required bool followCurrentWeek,
+    bool syncPendingDebugDate = false,
+  }) async {
+    final previousCurrentWeek = _weekForDate(_today);
+    final latestToday = _normalizeDate(
+      _currentMoment(syncPendingDebugDate: syncPendingDebugDate),
+    );
+    if (latestToday == _today) {
+      if (syncPendingDebugDate && widget.isDebugMode) {
+        setState(() {
+          _pendingDebugDate = null;
+          _configuredDebugDate = latestToday;
+        });
+      }
+      return;
+    }
+
+    final shouldFollowCurrentWeek =
+        followCurrentWeek && _selectedWeek == previousCurrentWeek;
+    setState(() {
+      _today = latestToday;
+      if (syncPendingDebugDate && widget.isDebugMode) {
+        _pendingDebugDate = null;
+        _configuredDebugDate = latestToday;
+      }
+    });
+
+    if (shouldFollowCurrentWeek) {
+      await _jumpToWeek(_weekForDate(latestToday));
+    }
+  }
 
   Future<void> _maybeAutoRefresh(Schedule schedule) async {
-    if (widget.schedule != null ||
+    if ((!widget.isDebugMode && widget.schedule != null) ||
         _isManualRefreshing ||
         _autoRefreshInFlight) {
       return;
@@ -143,7 +258,48 @@ class _SchedulePageState extends ConsumerState<SchedulePage>
   }
 
   Future<void> _jumpToToday() async {
+    await _syncCurrentDate(followCurrentWeek: false);
     await _jumpToWeek(_weekForDate(_today));
+  }
+
+  void _setDebugDateSyncImmediately(bool value) {
+    setState(() {
+      _debugDateSyncImmediately = value;
+    });
+  }
+
+  void _setDebugCacheAge(Duration value) {
+    setState(() {
+      _debugCacheAge = value;
+      _lastAutoRefreshBaseline = null;
+    });
+  }
+
+  void _setDebugRefreshDuration(Duration value) {
+    setState(() {
+      _debugRefreshDuration = value;
+    });
+  }
+
+  Future<void> _setDebugDate(DateTime date) async {
+    final normalized = _normalizeDate(date);
+    if (_debugDateSyncImmediately) {
+      final previousCurrentWeek = _weekForDate(_today);
+      final shouldFollowCurrentWeek = _selectedWeek == previousCurrentWeek;
+      setState(() {
+        _configuredDebugDate = normalized;
+        _pendingDebugDate = null;
+        _today = normalized;
+      });
+      if (shouldFollowCurrentWeek) {
+        await _jumpToWeek(_weekForDate(normalized));
+      }
+      return;
+    }
+    setState(() {
+      _configuredDebugDate = normalized;
+      _pendingDebugDate = normalized;
+    });
   }
 
   Future<void> _jumpToWeek(int week) async {
@@ -214,6 +370,17 @@ class _SchedulePageState extends ConsumerState<SchedulePage>
 
   static DateTime _normalizeDate(DateTime value) {
     return DateTime(value.year, value.month, value.day);
+  }
+
+  Schedule _debugScheduleForDisplay(Schedule schedule) {
+    final syncedAt = _currentMoment().subtract(_debugCacheAge);
+    return Schedule(
+      semesterLabel: schedule.semesterLabel,
+      generatedAt: syncedAt,
+      isStale: schedule.isStale,
+      lastSyncedAt: syncedAt,
+      courses: schedule.courses,
+    );
   }
 
   String _formatRefreshTime(Schedule schedule) {
@@ -297,7 +464,9 @@ class _SchedulePageState extends ConsumerState<SchedulePage>
         ? ref.watch(scheduleControllerProvider)
         : const AsyncValue<Schedule?>.data(null);
     final authState = ref.watch(authControllerProvider);
-    final currentSchedule = widget.schedule ?? scheduleState.valueOrNull;
+    final currentSchedule = widget.isDebugMode && widget.schedule != null
+        ? _debugScheduleForDisplay(widget.schedule!)
+        : widget.schedule ?? scheduleState.valueOrNull;
     final scheduleTextScaler = _scheduleTextScaler(context);
     final refreshWarning = widget.schedule == null
         ? ref.watch(scheduleRefreshWarningProvider)
@@ -308,7 +477,8 @@ class _SchedulePageState extends ConsumerState<SchedulePage>
         ? null
         : _formatRefreshTime(currentSchedule);
 
-    if (widget.schedule == null && currentSchedule != null) {
+    if ((widget.schedule == null || widget.isDebugMode) &&
+        currentSchedule != null) {
       unawaited(_maybeAutoRefresh(currentSchedule));
     }
 
@@ -362,7 +532,25 @@ class _SchedulePageState extends ConsumerState<SchedulePage>
               Navigator.of(context).push(
                 MaterialPageRoute(
                   builder: (_) => SettingsPage(
-                    academicUsername: authState.user?.academicUsername ?? '未绑定',
+                    academicUsername: widget.isDebugMode
+                        ? 'debug'
+                        : authState.user?.academicUsername ?? '未绑定',
+                    isDebugMode: widget.isDebugMode,
+                    debugEffectiveDate: widget.isDebugMode ? _today : null,
+                    debugConfiguredDate: widget.isDebugMode
+                        ? _configuredDebugDate
+                        : null,
+                    debugDateSyncImmediately: _debugDateSyncImmediately,
+                    debugCacheAge: _debugCacheAge,
+                    debugRefreshDuration: _debugRefreshDuration,
+                    onDebugDateSelected: (date) {
+                      unawaited(_setDebugDate(date));
+                    },
+                    onDebugDateSyncImmediatelyChanged:
+                        _setDebugDateSyncImmediately,
+                    onDebugCacheAgeChanged: _setDebugCacheAge,
+                    onDebugRefreshDurationChanged: _setDebugRefreshDuration,
+                    debugDateSelector: widget.debugDateSelector,
                   ),
                 ),
               );
@@ -456,6 +644,19 @@ class _SchedulePageState extends ConsumerState<SchedulePage>
                                   ),
                             ),
                           ),
+                        if (_showRefreshStillSyncing)
+                          _InfoBanner(
+                            backgroundColor: const Color(0xFFFFF7ED),
+                            textColor: const Color(0xFF9A3412),
+                            child: Text(
+                              '同步仍在后台进行中',
+                              style: Theme.of(context).textTheme.bodyMedium
+                                  ?.copyWith(
+                                    color: const Color(0xFF9A3412),
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                            ),
+                          ),
                         SizedBox(
                           key: const ValueKey('schedule-swipe-area'),
                           height: _scheduleSwipeHeight(
@@ -505,6 +706,7 @@ class _SchedulePageState extends ConsumerState<SchedulePage>
                                         key: ValueKey('schedule-week-$week'),
                                         schedule: weekSchedule,
                                         weekStartDate: _weekStartForWeek(week),
+                                        currentDate: _today,
                                         borderRadius: borderRadius,
                                       ),
                                     ),

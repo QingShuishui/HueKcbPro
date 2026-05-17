@@ -732,6 +732,175 @@ void main() {
   });
 
   testWidgets(
+    'shows background syncing message instead of success when refresh times out',
+    (tester) async {
+      final repository = _NeverUpdatedPageRefreshRepository();
+      final container = ProviderContainer(
+        overrides: [
+          scheduleControllerProvider.overrideWith(
+            (ref) => ScheduleController(
+              ref,
+              repository,
+              refreshPollTimeout: const Duration(milliseconds: 120),
+              refreshPollInterval: const Duration(milliseconds: 20),
+            ),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: MaterialApp(
+            home: SchedulePage(initialDate: DateTime(2026, 3, 2)),
+          ),
+        ),
+      );
+
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      await tester.tap(find.byKey(const ValueKey('schedule-refresh-button')));
+      await tester.pump();
+      expect(find.textContaining('正在同步课表'), findsOneWidget);
+
+      await tester.pumpAndSettle();
+
+      expect(find.text('课表已更新'), findsNothing);
+      expect(find.text('同步仍在后台进行中'), findsOneWidget);
+      expect(repository.refreshCalls, 1);
+      await tester.pump(const Duration(milliseconds: 2200));
+      await tester.pump(const Duration(milliseconds: 50));
+    },
+  );
+
+  testWidgets(
+    'manual refresh follows the new current week after date changes',
+    (tester) async {
+      final container = ProviderContainer(
+        overrides: [
+          scheduleRepositoryProvider.overrideWithValue(
+            _WeekRolloverScheduleRepository(),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: MaterialApp(
+            home: SchedulePage(initialDate: DateTime(2026, 3, 25)),
+          ),
+        ),
+      );
+
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(find.text('第4周'), findsWidgets);
+      expect(find.text('软件测试技术'), findsOneWidget);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: MaterialApp(
+            home: SchedulePage(initialDate: DateTime(2026, 3, 30)),
+          ),
+        ),
+      );
+
+      await tester.tap(find.byKey(const ValueKey('schedule-refresh-button')));
+      await tester.pump();
+      await tester.pumpAndSettle();
+
+      expect(find.text('第5周'), findsWidgets);
+      expect(find.text('软件测试技术'), findsNothing);
+      expect(find.text('编译原理'), findsOneWidget);
+      await tester.pump(const Duration(milliseconds: 1200));
+      await tester.pump(const Duration(milliseconds: 100));
+    },
+  );
+
+  testWidgets('debug date can wait for manual refresh before taking effect', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MaterialApp(
+          home: SchedulePage(
+            schedule: _debugDateSchedule,
+            initialDate: DateTime(2026, 3, 25),
+            isDebugMode: true,
+            debugDateSelector: (context, initialDate) async {
+              return DateTime(2026, 3, 30);
+            },
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('第4周'), findsWidgets);
+    expect(find.text('软件测试技术'), findsOneWidget);
+
+    await tester.tap(find.byIcon(Icons.settings_outlined));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('立即刷新生效'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('设置当前日期'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('待同步：2026-03-30'), findsOneWidget);
+
+    Navigator.of(tester.element(find.text('Debug 测试'))).pop();
+    await tester.pumpAndSettle();
+
+    expect(find.text('第4周'), findsWidgets);
+    expect(find.text('软件测试技术'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('schedule-refresh-button')));
+    await tester.pump();
+    await tester.pumpAndSettle();
+
+    expect(find.text('第5周'), findsWidgets);
+    expect(find.text('软件测试技术'), findsNothing);
+    expect(find.text('编译原理'), findsOneWidget);
+    await tester.pump(const Duration(milliseconds: 1200));
+    await tester.pump(const Duration(milliseconds: 100));
+  });
+
+  testWidgets('debug refresh duration can simulate timeout feedback', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MaterialApp(
+          home: SchedulePage(
+            schedule: _debugDateSchedule,
+            initialDate: DateTime(2026, 3, 25),
+            isDebugMode: true,
+            debugInitialRefreshDuration: const Duration(seconds: 11),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('schedule-refresh-button')));
+    await tester.pump();
+
+    expect(find.textContaining('正在同步课表'), findsOneWidget);
+
+    await tester.pump(const Duration(seconds: 10));
+    await tester.pump();
+
+    expect(find.text('课表已更新'), findsNothing);
+    expect(find.text('同步仍在后台进行中'), findsOneWidget);
+    await tester.pump(const Duration(milliseconds: 2200));
+    await tester.pump(const Duration(milliseconds: 50));
+  });
+
+  testWidgets(
     'auto refreshes schedule when last update is older than one hour',
     (tester) async {
       final container = ProviderContainer(
@@ -804,6 +973,25 @@ class _RefreshingScheduleRepository extends ScheduleRepository {
   Future<void> refreshFromAcademicSystem() async {
     _refreshRequested = true;
     await Future<void>.delayed(const Duration(milliseconds: 50));
+  }
+}
+
+class _NeverUpdatedPageRefreshRepository extends ScheduleRepository {
+  int refreshCalls = 0;
+
+  @override
+  Future<Schedule?> readCachedSchedule() async {
+    return _initialSchedule;
+  }
+
+  @override
+  Future<Schedule> fetchCurrentSchedule() async {
+    return _initialSchedule;
+  }
+
+  @override
+  Future<void> refreshFromAcademicSystem() async {
+    refreshCalls += 1;
   }
 }
 
@@ -939,6 +1127,26 @@ class _AutoRefreshingScheduleRepository extends ScheduleRepository {
   }
 }
 
+class _WeekRolloverScheduleRepository extends ScheduleRepository {
+  bool _refreshRequested = false;
+
+  @override
+  Future<Schedule?> readCachedSchedule() async {
+    return _weekFourSchedule;
+  }
+
+  @override
+  Future<Schedule> fetchCurrentSchedule() async {
+    return _refreshRequested ? _weekFiveSchedule : _weekFourSchedule;
+  }
+
+  @override
+  Future<void> refreshFromAcademicSystem() async {
+    _refreshRequested = true;
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+  }
+}
+
 final _initialSchedule = Schedule(
   semesterLabel: '2026春',
   generatedAt: DateTime.parse('2026-04-04T10:00:00Z'),
@@ -975,6 +1183,77 @@ final _updatedSchedule = Schedule(
       lessonEnd: 4,
       rawWeeks: '1-16(周)',
       parsedWeeks: [1, 2, 3],
+    ),
+  ],
+);
+
+final _weekFourSchedule = Schedule(
+  semesterLabel: '2026春',
+  generatedAt: DateTime(2026, 3, 30),
+  isStale: false,
+  lastSyncedAt: DateTime(2026, 3, 30),
+  courses: const [
+    Course(
+      name: '软件测试技术',
+      code: 'SIT',
+      teacher: '张三',
+      room: 'S4409',
+      weekday: 1,
+      lessonStart: 1,
+      lessonEnd: 2,
+      rawWeeks: '4(周)',
+      parsedWeeks: [4],
+    ),
+  ],
+);
+
+final _weekFiveSchedule = Schedule(
+  semesterLabel: '2026春',
+  generatedAt: DateTime.parse('2026-03-30T10:05:00Z'),
+  isStale: false,
+  lastSyncedAt: DateTime.parse('2026-03-30T10:05:00Z'),
+  courses: const [
+    Course(
+      name: '编译原理',
+      code: 'BYYL',
+      teacher: '李四',
+      room: 'S3301',
+      weekday: 2,
+      lessonStart: 3,
+      lessonEnd: 4,
+      rawWeeks: '5(周)',
+      parsedWeeks: [5],
+    ),
+  ],
+);
+
+final _debugDateSchedule = Schedule(
+  semesterLabel: 'Debug 日期测试学期',
+  generatedAt: DateTime(2026, 3, 25),
+  isStale: false,
+  lastSyncedAt: DateTime(2026, 3, 25),
+  courses: const [
+    Course(
+      name: '软件测试技术',
+      code: 'SIT',
+      teacher: '张三',
+      room: 'S4409',
+      weekday: 1,
+      lessonStart: 1,
+      lessonEnd: 2,
+      rawWeeks: '4(周)',
+      parsedWeeks: [4],
+    ),
+    Course(
+      name: '编译原理',
+      code: 'BYYL',
+      teacher: '李四',
+      room: 'S3301',
+      weekday: 2,
+      lessonStart: 3,
+      lessonEnd: 4,
+      rawWeeks: '5(周)',
+      parsedWeeks: [5],
     ),
   ],
 );

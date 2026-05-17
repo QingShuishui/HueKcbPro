@@ -146,6 +146,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                                               schedule:
                                                   debugLongContentSchedule,
                                               initialDate: DateTime(2026, 3, 2),
+                                              isDebugMode: true,
                                             ),
                                           ),
                                         );

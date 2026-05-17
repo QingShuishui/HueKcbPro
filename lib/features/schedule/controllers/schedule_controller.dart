@@ -8,15 +8,21 @@ import '../repositories/schedule_repository.dart';
 
 enum ScheduleRefreshWarning { none, staleCache, offlineCache }
 
+enum ScheduleManualRefreshResult { updated, stillSyncing, failed }
+
 class ScheduleController extends StateNotifier<AsyncValue<Schedule?>> {
-  ScheduleController(this._ref, this._repository)
-    : super(const AsyncValue.data(null));
+  ScheduleController(
+    this._ref,
+    this._repository, {
+    this.refreshPollTimeout = const Duration(seconds: 10),
+    this.refreshPollInterval = const Duration(milliseconds: 400),
+  }) : super(const AsyncValue.data(null));
 
   final Ref _ref;
   final ScheduleRepository _repository;
+  final Duration refreshPollTimeout;
+  final Duration refreshPollInterval;
   bool _isRefreshing = false;
-  static const _refreshPollAttempts = 8;
-  static const _refreshPollInterval = Duration(milliseconds: 400);
 
   bool get isRefreshing => _isRefreshing;
 
@@ -44,15 +50,18 @@ class ScheduleController extends StateNotifier<AsyncValue<Schedule?>> {
     }
   }
 
-  Future<bool> manualRefresh() async {
+  Future<ScheduleManualRefreshResult> manualRefresh() async {
     _isRefreshing = true;
     final previous = state.valueOrNull;
     try {
       await _repository.refreshFromAcademicSystem();
       final refreshed = await _waitForUpdatedSchedule(previous);
+      if (refreshed == null) {
+        return ScheduleManualRefreshResult.stillSyncing;
+      }
       state = AsyncValue.data(refreshed);
       _setWarningFromSchedule(refreshed);
-      return true;
+      return ScheduleManualRefreshResult.updated;
     } catch (error, stackTrace) {
       if (previous != null) {
         state = AsyncValue.data(previous);
@@ -61,27 +70,33 @@ class ScheduleController extends StateNotifier<AsyncValue<Schedule?>> {
         state = AsyncValue.error(error, stackTrace);
         _clearWarning();
       }
-      return false;
+      return ScheduleManualRefreshResult.failed;
     } finally {
       _isRefreshing = false;
     }
   }
 
-  Future<Schedule> _waitForUpdatedSchedule(Schedule? previous) async {
+  Future<Schedule?> _waitForUpdatedSchedule(Schedule? previous) async {
     final fallback = await _repository.fetchCurrentSchedule();
     if (previous == null || _hasScheduleUpdated(previous, fallback)) {
       return fallback;
     }
 
-    Schedule latest = fallback;
-    for (var attempt = 1; attempt < _refreshPollAttempts; attempt++) {
-      await Future<void>.delayed(_refreshPollInterval);
-      latest = await _repository.fetchCurrentSchedule();
+    final deadline = DateTime.now().add(refreshPollTimeout);
+    while (DateTime.now().isBefore(deadline)) {
+      final remaining = deadline.difference(DateTime.now());
+      if (remaining <= Duration.zero) {
+        break;
+      }
+      await Future<void>.delayed(
+        remaining < refreshPollInterval ? remaining : refreshPollInterval,
+      );
+      final latest = await _repository.fetchCurrentSchedule();
       if (_hasScheduleUpdated(previous, latest)) {
         return latest;
       }
     }
-    return latest;
+    return null;
   }
 
   bool _hasScheduleUpdated(Schedule previous, Schedule next) {

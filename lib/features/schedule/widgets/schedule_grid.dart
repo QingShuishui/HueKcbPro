@@ -29,11 +29,13 @@ class ScheduleGrid extends StatelessWidget {
     required this.schedule,
     required this.weekStartDate,
     this.borderRadius = 0,
+    this.currentDate,
   });
 
   final Schedule schedule;
   final DateTime weekStartDate;
   final double borderRadius;
+  final DateTime? currentDate;
 
   static double estimatedHeight({
     required Schedule schedule,
@@ -144,7 +146,11 @@ class ScheduleGrid extends StatelessWidget {
 
             return Column(
               children: [
-                _HeaderRow(metrics: metrics, weekStartDate: weekStartDate),
+                _HeaderRow(
+                  metrics: metrics,
+                  weekStartDate: weekStartDate,
+                  currentDate: currentDate,
+                ),
                 for (
                   var rowIndex = 0;
                   rowIndex < _lessonLabels.length;
@@ -550,15 +556,20 @@ double _measureTextHeight({
 }
 
 class _HeaderRow extends StatelessWidget {
-  const _HeaderRow({required this.metrics, required this.weekStartDate});
+  const _HeaderRow({
+    required this.metrics,
+    required this.weekStartDate,
+    this.currentDate,
+  });
 
   final _ResponsiveScheduleMetrics metrics;
   final DateTime weekStartDate;
+  final DateTime? currentDate;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final today = DateTime.now();
+    final today = currentDate ?? DateTime.now();
 
     return Row(
       children: [

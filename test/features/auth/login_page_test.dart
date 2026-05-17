@@ -80,6 +80,37 @@ void main() {
     expect(find.byType(SchedulePage), findsOneWidget);
     expect(find.textContaining('超长课程名称'), findsWidgets);
   });
+
+  testWidgets('debug schedule opens settings with date controls', (
+    tester,
+  ) async {
+    final repository = _TrackingAuthRepository();
+    final container = ProviderContainer(
+      overrides: [authRepositoryProvider.overrideWithValue(repository)],
+    );
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: LoginPage()),
+      ),
+    );
+
+    await tester.enterText(find.byType(TextFormField).at(0), 'debug');
+    await tester.enterText(find.byType(TextFormField).at(1), 'debug');
+    await tester.tap(find.text('登录'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(Icons.settings_outlined));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Debug 测试'), findsOneWidget);
+    expect(find.text('设置当前日期'), findsOneWidget);
+    expect(find.text('立即刷新生效'), findsOneWidget);
+    expect(find.text('缓存距今'), findsOneWidget);
+    expect(find.text('刷新耗时'), findsOneWidget);
+  });
 }
 
 class _ThrowingAuthRepository extends AuthRepository {
