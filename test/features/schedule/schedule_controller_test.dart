@@ -136,6 +136,30 @@ class _NeverUpdatedRefreshScheduleRepository extends ScheduleRepository {
   }
 }
 
+class _ServerAlreadyNewerRefreshScheduleRepository extends ScheduleRepository {
+  int refreshCalls = 0;
+  int fetchCallsAfterRefresh = 0;
+  Schedule serverSchedule = _oldSchedule;
+
+  @override
+  Future<Schedule> fetchCurrentSchedule() async {
+    if (refreshCalls == 0) {
+      return serverSchedule;
+    }
+
+    fetchCallsAfterRefresh += 1;
+    if (fetchCallsAfterRefresh < 3) {
+      return serverSchedule;
+    }
+    return _newerSchedule;
+  }
+
+  @override
+  Future<void> refreshFromAcademicSystem() async {
+    refreshCalls += 1;
+  }
+}
+
 void main() {
   test('loadSchedule stores schedule in controller state', () async {
     final container = ProviderContainer(
@@ -279,6 +303,29 @@ void main() {
   );
 
   test(
+    'manualRefresh uses server baseline instead of stale page state',
+    () async {
+      final repository = _ServerAlreadyNewerRefreshScheduleRepository();
+      final container = ProviderContainer(
+        overrides: [scheduleRepositoryProvider.overrideWithValue(repository)],
+      );
+      addTearDown(container.dispose);
+
+      await container.read(scheduleControllerProvider.notifier).loadSchedule();
+      repository.serverSchedule = _newSchedule;
+      final result = await container
+          .read(scheduleControllerProvider.notifier)
+          .manualRefresh();
+
+      final state = container.read(scheduleControllerProvider);
+      expect(result, ScheduleManualRefreshResult.updated);
+      expect(repository.refreshCalls, 1);
+      expect(repository.fetchCallsAfterRefresh, greaterThanOrEqualTo(3));
+      expect(state.value?.generatedAt, _newerSchedule.generatedAt);
+    },
+  );
+
+  test(
     'loadSchedule shows cached schedule before fresh schedule arrives',
     () async {
       final container = ProviderContainer(
@@ -370,6 +417,26 @@ final _newSchedule = Schedule(
       weekday: 2,
       lessonStart: 3,
       lessonEnd: 4,
+      rawWeeks: '1-16(周)',
+      parsedWeeks: [1, 2, 3],
+    ),
+  ],
+);
+
+final _newerSchedule = Schedule(
+  semesterLabel: '2026春',
+  generatedAt: DateTime.parse('2026-04-04T10:10:00Z'),
+  isStale: false,
+  lastSyncedAt: DateTime.parse('2026-04-04T10:10:00Z'),
+  courses: const [
+    Course(
+      name: '操作系统',
+      code: 'OS',
+      teacher: '王五',
+      room: 'S3302',
+      weekday: 3,
+      lessonStart: 5,
+      lessonEnd: 6,
       rawWeeks: '1-16(周)',
       parsedWeeks: [1, 2, 3],
     ),

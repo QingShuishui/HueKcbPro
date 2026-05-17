@@ -54,8 +54,18 @@ class ScheduleController extends StateNotifier<AsyncValue<Schedule?>> {
     _isRefreshing = true;
     final previous = state.valueOrNull;
     try {
+      var baseline = previous;
+      if (previous != null) {
+        try {
+          baseline = await _repository.fetchCurrentSchedule();
+          state = AsyncValue.data(baseline);
+          _setWarningFromSchedule(baseline);
+        } catch (_) {
+          baseline = previous;
+        }
+      }
       await _repository.refreshFromAcademicSystem();
-      final refreshed = await _waitForUpdatedSchedule(previous);
+      final refreshed = await _waitForUpdatedSchedule(baseline);
       if (refreshed == null) {
         return ScheduleManualRefreshResult.stillSyncing;
       }
