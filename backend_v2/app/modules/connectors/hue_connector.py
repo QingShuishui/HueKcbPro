@@ -1,5 +1,6 @@
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import replace
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 
 import requests
 
@@ -113,32 +114,35 @@ class HUEConnector(AcademicConnector):
             get_settings().academic_semester_start_date,
             "%Y-%m-%d",
         ).date()
-        courses: list[NormalizedCourse] = []
+        weekly_results: list[tuple[int, NormalizedSchedule]] = []
 
-        for week in range(1, FALLBACK_WEEK_COUNT + 1):
-            request_date = start_date + timedelta(days=(week - 1) * 7)
-            try:
-                response = session.post(
-                    f"{self.base_url}/jsxsd/framework/main_index_loadkb.jsp",
-                    data={"rq": request_date.isoformat()},
-                    headers={"X-Requested-With": "XMLHttpRequest"},
-                    timeout=10,
+        with ThreadPoolExecutor(max_workers=FALLBACK_WEEK_COUNT) as executor:
+            future_to_week = {}
+            for week in range(1, FALLBACK_WEEK_COUNT + 1):
+                request_date = start_date + timedelta(days=(week - 1) * 7)
+                future = executor.submit(
+                    self._fetch_fallback_week,
+                    session,
+                    week,
+                    request_date,
                 )
-            except requests.RequestException:
-                continue
+                future_to_week[future] = week
 
-            if response.status_code != 200:
-                continue
+            for future in as_completed(future_to_week):
+                try:
+                    weekly_schedule = future.result()
+                except Exception:
+                    continue
+                if weekly_schedule is None:
+                    continue
+                weekly_results.append((future_to_week[future], weekly_schedule))
 
-            weekly_schedule = self.parse_schedule_html(response.text)
+        courses: list[NormalizedCourse] = []
+        for week, weekly_schedule in sorted(weekly_results, key=lambda item: item[0]):
             if not semester_label:
                 semester_label = weekly_schedule.semester_label
             courses.extend(
-                replace(
-                    course,
-                    raw_weeks=f"{week}(周)",
-                    parsed_weeks=[week],
-                )
+                replace(course, raw_weeks=f"{week}(周)", parsed_weeks=[week])
                 for course in weekly_schedule.courses
             )
 
@@ -147,6 +151,33 @@ class HUEConnector(AcademicConnector):
             generated_at=datetime.now(timezone.utc).isoformat(),
             courses=_merge_course_weeks(courses),
         )
+
+    def _fetch_fallback_week(
+        self,
+        session: requests.Session,
+        week: int,
+        request_date: date,
+    ) -> NormalizedSchedule | None:
+        worker_session = requests.Session()
+        try:
+            worker_session.headers.update(session.headers)
+            worker_session.cookies.update(session.cookies)
+        except (AttributeError, TypeError):
+            pass
+
+        try:
+            response = worker_session.post(
+                f"{self.base_url}/jsxsd/framework/main_index_loadkb.jsp",
+                data={"rq": request_date.isoformat()},
+                headers={"X-Requested-With": "XMLHttpRequest"},
+                timeout=10,
+            )
+        except requests.RequestException:
+            return None
+
+        if response.status_code != 200:
+            return None
+        return self.parse_schedule_html(response.text)
 
 
 def _merge_course_weeks(courses: list[NormalizedCourse]) -> list[NormalizedCourse]:

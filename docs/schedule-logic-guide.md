@@ -11,7 +11,8 @@
 3. 登录成功后，优先请求默认完整课表：
    `GET /jsxsd/xskb/xskb_list.do`
 4. 如果默认接口请求失败、状态码不是 200，或解析出的课程为空，再走备用接口。
-5. 备用接口按第 1-20 周逐周请求，并合并课程。
+5. 备用接口按第 1-20 周计算请求日期，20 个请求通过线程池同时发出。
+6. 所有备用结果返回后，后端按周次排序、合并课程，并输出和默认课表一致的标准结构。
 
 ## 主要文件
 
@@ -23,6 +24,7 @@
   - `_fetch_schedule_once(...)`
   - `_fetch_default_schedule(...)`
   - `_fetch_fallback_schedule(...)`
+  - `_fetch_fallback_week(...)`
   - `_merge_course_weeks(...)`
 
 HTML 解析：
@@ -90,6 +92,30 @@ FALLBACK_WEEK_COUNT = 20
 request_date = semester_start_date + timedelta(days=(week - 1) * 7)
 ```
 
+实现上使用：
+
+```python
+ThreadPoolExecutor(max_workers=FALLBACK_WEEK_COUNT)
+```
+
+也就是说，走备用接口时会同时提交 20 个周请求。每个周请求使用一个新的短生命周期 `requests.Session()`，并复制登录后的 headers 和 cookies，避免多个线程共享同一个 session。
+
+备用接口返回后，仍然解析成 `NormalizedSchedule` / `NormalizedCourse`，再进入和默认接口一样的标准化流程。前端看到的课程字段保持一致：
+
+```text
+semester_label
+generated_at
+courses[].name
+courses[].code
+courses[].teacher
+courses[].room
+courses[].weekday
+courses[].lesson_start
+courses[].lesson_end
+courses[].raw_weeks
+courses[].parsed_weeks
+```
+
 ## 合并规则
 
 备用接口会逐周返回课程，所以需要合并。同一门课的合并 key 是：
@@ -124,6 +150,9 @@ S101, S102
 如果要改备用接口，先改：
 
 - `test_connector_falls_back_to_weekly_endpoint_when_default_schedule_is_empty`
+- `test_fetch_fallback_week_posts_week_date_with_authenticated_session`
+- `test_connector_dispatches_fallback_weeks_with_twenty_workers`
+- `test_fallback_result_normalizes_to_main_schedule_payload_shape`
 
 如果要改默认备用周数，先改：
 

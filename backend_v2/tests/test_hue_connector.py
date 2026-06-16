@@ -1,6 +1,10 @@
+from datetime import date
 from unittest.mock import Mock, patch
 
+from app.modules.connectors import hue_connector
+from app.modules.connectors.base import NormalizedSchedule
 from app.modules.connectors.hue_connector import FALLBACK_WEEK_COUNT, HUEConnector
+from app.modules.schedule.service import normalize_connector_schedule
 
 
 def _schedule_html(
@@ -167,6 +171,14 @@ def test_connector_falls_back_to_weekly_endpoint_when_default_schedule_is_empty(
     session = session_cls.return_value
     ocr_cls.return_value.classification.return_value = "1234"
     monkeypatch.setattr("app.modules.connectors.hue_connector.FALLBACK_WEEK_COUNT", 2)
+    fallback_calls = []
+
+    def fake_week(self, _session, week, request_date):
+        fallback_calls.append((week, request_date.isoformat()))
+        room = "S101" if week == 1 else "S102"
+        return self.parse_schedule_html(_schedule_html(room=room))
+
+    monkeypatch.setattr(HUEConnector, "_fetch_fallback_week", fake_week)
 
     session.get.side_effect = [
         _response(),
@@ -177,11 +189,7 @@ def test_connector_falls_back_to_weekly_endpoint_when_default_schedule_is_empty(
             url="https://jwxt.hue.edu.cn/jsxsd/xskb/xskb_list.do",
         ),
     ]
-    session.post.side_effect = [
-        _response(url="https://jwxt.hue.edu.cn/xsMain.jsp"),
-        _response(text=_schedule_html(room="S101"), url="weekly-1"),
-        _response(text=_schedule_html(room="S102"), url="weekly-2"),
-    ]
+    session.post.side_effect = [_response(url="https://jwxt.hue.edu.cn/xsMain.jsp")]
 
     result = HUEConnector().fetch_schedule("demo_student_id", "pw123")
 
@@ -190,15 +198,112 @@ def test_connector_falls_back_to_weekly_endpoint_when_default_schedule_is_empty(
     assert result.courses[0].room == "S101, S102"
     assert result.courses[0].raw_weeks == "1-2(周)"
     assert result.courses[0].parsed_weeks == [1, 2]
-    fallback_calls = session.post.call_args_list[1:]
-    assert [call.args[0] for call in fallback_calls] == [
+    assert sorted(fallback_calls) == [(1, "2026-03-02"), (2, "2026-03-09")]
+
+
+def test_fetch_fallback_week_posts_week_date_with_authenticated_session(monkeypatch):
+    source_session = Mock()
+    source_session.headers = {"User-Agent": "test-agent"}
+    source_session.cookies = {"JSESSIONID": "abc123"}
+    worker_session = Mock()
+    worker_session.headers = {}
+    worker_session.cookies = {}
+    worker_session.post.return_value = _response(text=_schedule_html())
+    monkeypatch.setattr(hue_connector.requests, "Session", lambda: worker_session)
+
+    result = HUEConnector()._fetch_fallback_week(
+        source_session,
+        week=2,
+        request_date=date(2026, 3, 9),
+    )
+
+    assert result.semester_label == "2026春"
+    assert worker_session.headers["User-Agent"] == "test-agent"
+    assert worker_session.cookies["JSESSIONID"] == "abc123"
+    worker_session.post.assert_called_once_with(
         "https://jwxt.hue.edu.cn/jsxsd/framework/main_index_loadkb.jsp",
-        "https://jwxt.hue.edu.cn/jsxsd/framework/main_index_loadkb.jsp",
-    ]
-    assert [call.kwargs["data"] for call in fallback_calls] == [
-        {"rq": "2026-03-02"},
-        {"rq": "2026-03-09"},
-    ]
+        data={"rq": "2026-03-09"},
+        headers={"X-Requested-With": "XMLHttpRequest"},
+        timeout=10,
+    )
+
+
+def test_fallback_result_normalizes_to_main_schedule_payload_shape(monkeypatch):
+    monkeypatch.setattr("app.modules.connectors.hue_connector.FALLBACK_WEEK_COUNT", 1)
+    monkeypatch.setattr(
+        HUEConnector,
+        "_fetch_fallback_week",
+        lambda self, _session, _week, _request_date: self.parse_schedule_html(
+            _schedule_html()
+        ),
+        raising=False,
+    )
+
+    schedule = HUEConnector()._fetch_fallback_schedule(Mock(), semester_label="2026春")
+
+    payload = normalize_connector_schedule(schedule)
+
+    assert set(payload) == {
+        "semester_label",
+        "generated_at",
+        "courses",
+        "schedule_hash",
+    }
+    assert set(payload["courses"][0]) == {
+        "name",
+        "code",
+        "teacher",
+        "room",
+        "weekday",
+        "lesson_start",
+        "lesson_end",
+        "raw_weeks",
+        "parsed_weeks",
+    }
+
+
+def test_connector_dispatches_fallback_weeks_with_twenty_workers(monkeypatch):
+    class CompletedFuture:
+        def __init__(self, value):
+            self.value = value
+
+        def result(self):
+            return self.value
+
+    class RecordingExecutor:
+        instances = []
+
+        def __init__(self, max_workers):
+            self.max_workers = max_workers
+            self.submitted = []
+            RecordingExecutor.instances.append(self)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, traceback):
+            return False
+
+        def submit(self, fn, *args):
+            self.submitted.append((fn, args))
+            return CompletedFuture(fn(*args))
+
+    def fake_week(self, _session, week, _request_date):
+        return NormalizedSchedule(
+            semester_label="2026春",
+            generated_at="now",
+            courses=[],
+        )
+
+    monkeypatch.setattr(hue_connector, "ThreadPoolExecutor", RecordingExecutor, raising=False)
+    monkeypatch.setattr(hue_connector, "as_completed", lambda futures: futures, raising=False)
+    monkeypatch.setattr(HUEConnector, "_fetch_fallback_week", fake_week, raising=False)
+
+    HUEConnector()._fetch_fallback_schedule(Mock(), semester_label="2026春")
+
+    assert len(RecordingExecutor.instances) == 1
+    assert RecordingExecutor.instances[0].max_workers == FALLBACK_WEEK_COUNT
+    assert len(RecordingExecutor.instances[0].submitted) == FALLBACK_WEEK_COUNT
 
 
 def test_parser_reads_fixture_into_normalized_courses():
