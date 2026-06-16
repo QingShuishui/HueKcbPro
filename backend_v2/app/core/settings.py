@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     redis_url: str = "redis://localhost:6379/0"
     sentry_dsn: str = ""
     admin_token: str = ""
+    academic_semester_start_date: str = "2026-03-02"
 
 
 @lru_cache

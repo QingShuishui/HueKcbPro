@@ -1,6 +1,32 @@
 from unittest.mock import Mock, patch
 
-from app.modules.connectors.hue_connector import HUEConnector
+from app.modules.connectors.hue_connector import FALLBACK_WEEK_COUNT, HUEConnector
+
+
+def _schedule_html(
+    *,
+    semester: str = "2026春",
+    name: str = "软件测试技术 SIT",
+    room: str = "S101",
+    weeks: str = "1(周)",
+    teacher: str = "张三",
+) -> str:
+    return f"""
+    <div id="timetableDiv">{semester}</div>
+    <table id="kbtable">
+      <tr><th></th><th>周一</th></tr>
+      <tr>
+        <td>
+          <div class="kbcontent1">
+            {name}<br/>
+            {room}<br/>
+            {weeks}<br/>
+            {teacher}
+          </div>
+        </td>
+      </tr>
+    </table>
+    """
 
 
 def _response(**kwargs):
@@ -12,6 +38,10 @@ def _response(**kwargs):
     }
     defaults.update(kwargs)
     return type("R", (), defaults)()
+
+
+def test_connector_fallback_checks_twenty_weeks_by_default():
+    assert FALLBACK_WEEK_COUNT == 20
 
 
 @patch("app.modules.connectors.hue_connector.ddddocr.DdddOcr")
@@ -48,7 +78,7 @@ def test_connector_uses_supplied_credentials(session_cls, ocr_cls):
         "R",
         (),
         {
-            "text": "<div id='timetableDiv'>2026春</div><table id='kbtable'></table>",
+            "text": _schedule_html(),
             "status_code": 200,
             "url": "https://jwxt.hue.edu.cn",
         },
@@ -57,8 +87,9 @@ def test_connector_uses_supplied_credentials(session_cls, ocr_cls):
         response_home,
         response_sess,
         response_captcha,
+        response_table,
     ]
-    session.post.side_effect = [response_login, response_table]
+    session.post.side_effect = [response_login]
 
     connector = HUEConnector()
     connector.fetch_schedule("demo_student_id", "pw123")
@@ -74,21 +105,24 @@ def test_connector_retries_transient_login_redirect_failures(session_cls, ocr_cl
     session_cls.side_effect = sessions
     ocr_cls.return_value.classification.return_value = "1234"
 
-    for session in sessions:
+    for session in sessions[:2]:
         session.get.side_effect = [
             _response(),
             _response(text="abc#111"),
             _response(content=b"img"),
         ]
+    sessions[2].get.side_effect = [
+        _response(),
+        _response(text="abc#111"),
+        _response(content=b"img"),
+        _response(text=_schedule_html()),
+    ]
 
     failed_login = _response(url="https://jwxt.hue.edu.cn/Logon.do?method=logon")
     successful_login = _response(url="https://jwxt.hue.edu.cn/xsMain.jsp")
     sessions[0].post.return_value = failed_login
     sessions[1].post.return_value = failed_login
-    sessions[2].post.side_effect = [
-        successful_login,
-        _response(text="<div id='timetableDiv'>2026春</div><table id='kbtable'></table>"),
-    ]
+    sessions[2].post.return_value = successful_login
 
     result = HUEConnector().fetch_schedule("demo_student_id", "pw123")
 
@@ -96,39 +130,75 @@ def test_connector_retries_transient_login_redirect_failures(session_cls, ocr_cl
     assert session_cls.call_count == 3
     assert sessions[0].post.call_count == 1
     assert sessions[1].post.call_count == 1
-    assert sessions[2].post.call_count == 2
+    assert sessions[2].post.call_count == 1
 
 
 @patch("app.modules.connectors.hue_connector.ddddocr.DdddOcr")
 @patch("app.modules.connectors.hue_connector.requests.Session")
-def test_connector_posts_configured_course_term(session_cls, ocr_cls, monkeypatch):
+def test_connector_uses_default_schedule_endpoint(session_cls, ocr_cls):
     session = session_cls.return_value
     ocr_cls.return_value.classification.return_value = "1234"
-    monkeypatch.setattr(
-        "app.modules.connectors.hue_connector.COURSE_TERM_ID",
-        "2025-2026-1",
-    )
 
     session.get.side_effect = [
         _response(),
         _response(text="abc#111"),
         _response(content=b"img"),
-    ]
-    session.post.side_effect = [
-        _response(url="https://jwxt.hue.edu.cn/xsMain.jsp"),
         _response(
-            text="<div id='timetableDiv'>2025秋</div><table id='kbtable'></table>",
+            text=_schedule_html(semester="2025秋"),
             url="https://jwxt.hue.edu.cn/jsxsd/xskb/xskb_list.do",
         ),
     ]
+    session.post.side_effect = [_response(url="https://jwxt.hue.edu.cn/xsMain.jsp")]
 
     result = HUEConnector().fetch_schedule("demo_student_id", "pw123")
 
     assert result.semester_label == "2025秋"
-    schedule_call = session.post.call_args_list[1]
+    assert len(session.post.call_args_list) == 1
+    schedule_call = session.get.call_args_list[3]
     assert schedule_call.args[0] == "https://jwxt.hue.edu.cn/jsxsd/xskb/xskb_list.do"
-    assert schedule_call.kwargs["data"]["xnxq01id"] == "2025-2026-1"
-    assert schedule_call.kwargs["data"]["sfFD"] == "1"
+    assert "data" not in schedule_call.kwargs
+
+
+@patch("app.modules.connectors.hue_connector.ddddocr.DdddOcr")
+@patch("app.modules.connectors.hue_connector.requests.Session")
+def test_connector_falls_back_to_weekly_endpoint_when_default_schedule_is_empty(
+    session_cls, ocr_cls, monkeypatch
+):
+    session = session_cls.return_value
+    ocr_cls.return_value.classification.return_value = "1234"
+    monkeypatch.setattr("app.modules.connectors.hue_connector.FALLBACK_WEEK_COUNT", 2)
+
+    session.get.side_effect = [
+        _response(),
+        _response(text="abc#111"),
+        _response(content=b"img"),
+        _response(
+            text="<div id='timetableDiv'>2026春</div><table id='kbtable'></table>",
+            url="https://jwxt.hue.edu.cn/jsxsd/xskb/xskb_list.do",
+        ),
+    ]
+    session.post.side_effect = [
+        _response(url="https://jwxt.hue.edu.cn/xsMain.jsp"),
+        _response(text=_schedule_html(room="S101"), url="weekly-1"),
+        _response(text=_schedule_html(room="S102"), url="weekly-2"),
+    ]
+
+    result = HUEConnector().fetch_schedule("demo_student_id", "pw123")
+
+    assert result.semester_label == "2026春"
+    assert len(result.courses) == 1
+    assert result.courses[0].room == "S101, S102"
+    assert result.courses[0].raw_weeks == "1-2(周)"
+    assert result.courses[0].parsed_weeks == [1, 2]
+    fallback_calls = session.post.call_args_list[1:]
+    assert [call.args[0] for call in fallback_calls] == [
+        "https://jwxt.hue.edu.cn/jsxsd/framework/main_index_loadkb.jsp",
+        "https://jwxt.hue.edu.cn/jsxsd/framework/main_index_loadkb.jsp",
+    ]
+    assert [call.kwargs["data"] for call in fallback_calls] == [
+        {"rq": "2026-03-02"},
+        {"rq": "2026-03-09"},
+    ]
 
 
 def test_parser_reads_fixture_into_normalized_courses():
