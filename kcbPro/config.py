@@ -2,6 +2,7 @@
 """
 配置文件 - 课表系统配置
 """
+import os
 
 # 教务系统配置
 USERNAME = 'demo_student_id'
@@ -10,6 +11,7 @@ BASE_URL = 'https://jwxt.hue.edu.cn'
 
 # 学期配置
 SEMESTER_START_DATE = '2026-03-02'  # 新学期第一周开始日期（2026年3月2日）
+COURSE_TERM_ID = os.environ.get('COURSE_TERM_ID', '2025-2026-1')
 
 # Flask 配置
 DEBUG = True

@@ -72,7 +72,7 @@ def get_schedule_api(token):
     password = decrypt_password(record["encrypted_password"])
     data, error = login_and_get_schedule(record["username"], password)
     if error:
-        return jsonify({"error": "登录失效，请重新登录"}), 400
+        return jsonify({"error": error}), 400
 
     credential_store.touch_record(token, datetime.now(timezone.utc).isoformat())
     semester_start_date = record.get("semester_start_date") or SEMESTER_START_DATE

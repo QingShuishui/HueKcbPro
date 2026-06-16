@@ -11,7 +11,7 @@ try:
 except ImportError:
     ddddocr = None
 
-from config import BASE_URL
+from config import BASE_URL, COURSE_TERM_ID
 from utils.parser import parse_table
 
 
@@ -69,8 +69,19 @@ def login_and_get_schedule(username, password):
             return login_and_get_schedule(username, password)  # 验证码错误，重试
         return None, "登录失败"
     
-    # 6. 获取课表
-    r = session.get(f'{BASE_URL}/jsxsd/xskb/xskb_list.do', timeout=10)
+    # 6. 获取指定学期课表
+    r = session.post(
+        f'{BASE_URL}/jsxsd/xskb/xskb_list.do',
+        data={
+            'jx0404id': '',
+            'cj0701id': '',
+            'zc': '',
+            'demo': '评教未完成，不能查看课表！',
+            'xnxq01id': COURSE_TERM_ID,
+            'sfFD': '1',
+        },
+        timeout=10,
+    )
     if r.status_code != 200:
         return None, "获取课表失败"
     

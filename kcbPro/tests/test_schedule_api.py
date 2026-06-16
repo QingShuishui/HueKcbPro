@@ -104,3 +104,22 @@ def test_schedule_api_supports_all_week_mode(_crawler, _decrypt_password, client
 
     assert response.status_code == 200
     assert response.get_json()["selected_week"] is None
+
+
+@patch("app.decrypt_password", return_value="pw123")
+@patch("app.login_and_get_schedule", return_value=(None, "未找到课表"))
+def test_schedule_api_returns_crawler_error(_crawler, _decrypt_password, client):
+    from app import credential_store
+
+    credential_store.save_record(
+        token="Ab3X9kQ2",
+        username="demo_student_id",
+        encrypted_password="ciphertext",
+        created_at="2026-03-31T12:00:00",
+        last_accessed_at="2026-03-31T12:00:00",
+    )
+
+    response = client.get("/api/schedule/Ab3X9kQ2")
+
+    assert response.status_code == 400
+    assert response.get_json()["error"] == "未找到课表"

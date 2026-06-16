@@ -44,14 +44,14 @@ def test_login_and_get_schedule_uses_supplied_credentials(
             "url": "https://jwxt.hue.edu.cn",
         },
     )()
-    session.get.side_effect = [response_home, response_sess, response_captcha, response_table]
-    session.post.return_value = response_login
+    session.get.side_effect = [response_home, response_sess, response_captcha]
+    session.post.side_effect = [response_login, response_table]
 
     username = "demo_student_id"
     password = "pw123"
     crawler.login_and_get_schedule(username, password)
 
-    post_data = session.post.call_args.kwargs["data"]
+    post_data = session.post.call_args_list[0].kwargs["data"]
     assert "demo_student_id" not in post_data["encoded"]
 
     scode, sxh = response_sess.text.split("#")
@@ -62,13 +62,13 @@ def test_login_and_get_schedule_uses_supplied_credentials(
     # call with different credentials must produce a different encoded payload.
     session_2 = session_cls.return_value.__class__()
     session_cls.side_effect = [session_2]
-    session_2.get.side_effect = [response_home, response_sess, response_captcha, response_table]
-    session_2.post.return_value = response_login
+    session_2.get.side_effect = [response_home, response_sess, response_captcha]
+    session_2.post.side_effect = [response_login, response_table]
 
     username_2 = "0000000000"
     password_2 = "pw999"
     crawler.login_and_get_schedule(username_2, password_2)
-    post_data_2 = session_2.post.call_args.kwargs["data"]
+    post_data_2 = session_2.post.call_args_list[0].kwargs["data"]
     expected_2 = _expected_encoded(username_2, password_2, scode, sxh)
     assert post_data_2["encoded"] == expected_2
     assert post_data_2["encoded"] != post_data["encoded"]
@@ -101,7 +101,62 @@ def test_login_and_get_schedule_does_not_exit_if_ddddocr_missing():
         with patch("sys.exit", side_effect=AssertionError("sys.exit called")):
             reloaded = importlib.reload(crawler)
 
-    result, err = reloaded.login_and_get_schedule("u", "p")
-    assert result is None
-    assert err is not None
-    assert "ddddocr" in err.lower()
+    try:
+        result, err = reloaded.login_and_get_schedule("u", "p")
+        assert result is None
+        assert err is not None
+        assert "ddddocr" in err.lower()
+    finally:
+        importlib.reload(crawler)
+
+
+@patch("utils.crawler.parse_table", return_value=[])
+@patch("utils.crawler.ddddocr.DdddOcr")
+@patch("utils.crawler.requests.Session")
+def test_login_and_get_schedule_posts_configured_course_term(
+    session_cls, ocr_cls, _parse_table, monkeypatch
+):
+    session = session_cls.return_value
+    ocr_cls.return_value.classification.return_value = "1234"
+    monkeypatch.setattr(crawler, "COURSE_TERM_ID", "2025-2026-1")
+
+    response_home = type(
+        "R", (), {"text": "", "status_code": 200, "url": "https://jwxt.hue.edu.cn"}
+    )()
+    response_sess = type(
+        "R", (), {"text": "abc#111", "status_code": 200, "url": "https://jwxt.hue.edu.cn"}
+    )()
+    response_captcha = type(
+        "R",
+        (),
+        {"content": b"img", "status_code": 200, "url": "https://jwxt.hue.edu.cn"},
+    )()
+    response_login = type(
+        "R",
+        (),
+        {
+            "text": "",
+            "status_code": 200,
+            "url": "https://jwxt.hue.edu.cn/xsMain.jsp",
+        },
+    )()
+    response_table = type(
+        "R",
+        (),
+        {
+            "text": "<div id='timetableDiv'>2025秋</div><table id='kbtable'></table>",
+            "status_code": 200,
+            "url": "https://jwxt.hue.edu.cn/jsxsd/xskb/xskb_list.do",
+        },
+    )()
+    session.get.side_effect = [response_home, response_sess, response_captcha]
+    session.post.side_effect = [response_login, response_table]
+
+    data, error = crawler.login_and_get_schedule("demo_student_id", "pw123")
+
+    assert error is None
+    assert data["semester_info"] == "2025秋"
+    schedule_call = session.post.call_args_list[1]
+    assert schedule_call.args[0] == "https://jwxt.hue.edu.cn/jsxsd/xskb/xskb_list.do"
+    assert schedule_call.kwargs["data"]["xnxq01id"] == "2025-2026-1"
+    assert schedule_call.kwargs["data"]["sfFD"] == "1"

@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+import os
 
 import requests
 
@@ -10,6 +11,9 @@ except ImportError:
 from app.modules.connectors.base import AcademicConnector, NormalizedSchedule
 from app.modules.connectors.errors import InvalidCredentialsError
 from app.modules.connectors.hue_parser import parse_schedule_html
+
+
+COURSE_TERM_ID = os.environ.get("COURSE_TERM_ID", "2025-2026-1")
 
 
 class HUEConnector(AcademicConnector):
@@ -72,8 +76,16 @@ class HUEConnector(AcademicConnector):
         if "xsMain.jsp" not in login_response.url:
             raise InvalidCredentialsError("invalid academic credentials")
 
-        table_response = session.get(
+        table_response = session.post(
             f"{self.base_url}/jsxsd/xskb/xskb_list.do",
+            data={
+                "jx0404id": "",
+                "cj0701id": "",
+                "zc": "",
+                "demo": "评教未完成，不能查看课表！",
+                "xnxq01id": COURSE_TERM_ID,
+                "sfFD": "1",
+            },
             timeout=10,
         )
         return self.parse_schedule_html(table_response.text)
