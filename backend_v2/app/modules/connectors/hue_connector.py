@@ -16,6 +16,13 @@ from app.modules.connectors.hue_parser import parse_schedule_html
 
 
 FALLBACK_WEEK_COUNT = 20
+FALLBACK_REQUEST_HEADERS = {
+    "Accept": "text/html, */*; q=0.01",
+    "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6",
+    "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+    "Referer": "https://jwxt.hue.edu.cn/jsxsd/framework/xsMain_new.jsp?t1=1",
+    "X-Requested-With": "XMLHttpRequest",
+}
 
 
 class HUEConnector(AcademicConnector):
@@ -169,7 +176,7 @@ class HUEConnector(AcademicConnector):
             response = worker_session.post(
                 f"{self.base_url}/jsxsd/framework/main_index_loadkb.jsp",
                 data={"rq": request_date.isoformat()},
-                headers={"X-Requested-With": "XMLHttpRequest"},
+                headers=FALLBACK_REQUEST_HEADERS.copy(),
                 timeout=10,
             )
         except requests.RequestException:

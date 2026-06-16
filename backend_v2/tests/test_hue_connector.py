@@ -223,7 +223,13 @@ def test_fetch_fallback_week_posts_week_date_with_authenticated_session(monkeypa
     worker_session.post.assert_called_once_with(
         "https://jwxt.hue.edu.cn/jsxsd/framework/main_index_loadkb.jsp",
         data={"rq": "2026-03-09"},
-        headers={"X-Requested-With": "XMLHttpRequest"},
+        headers={
+            "Accept": "text/html, */*; q=0.01",
+            "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6",
+            "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+            "Referer": "https://jwxt.hue.edu.cn/jsxsd/framework/xsMain_new.jsp?t1=1",
+            "X-Requested-With": "XMLHttpRequest",
+        },
         timeout=10,
     )
 
@@ -363,6 +369,64 @@ def test_parser_reads_alphanumeric_course_code():
 
     assert result.courses[0].name == "程序设计基础"
     assert result.courses[0].code == "CS101"
+
+
+def test_parser_reads_home_kb_table_fallback_html():
+    html = """
+    <table id="tab1" class="table kb_table">
+      <tr>
+        <th>周/节次</th>
+        <th>星期一</th>
+        <th>星期二</th>
+        <th>星期三</th>
+        <th>星期四</th>
+        <th>星期五</th>
+        <th>星期六</th>
+        <th>星期日</th>
+      </tr>
+      <tr>
+        <td>上午1-2节<br/>(01,02小节)<br/>08:00-09:40</td>
+        <td></td>
+        <td>
+          <p title="课程学分：3.5&lt;br/&gt;课程属性：必修&lt;br/&gt;课程名称：数据库原理&lt;br/&gt;上课时间：第16周 星期二 [01-02]节&lt;br/&gt;上课地点：BY509">数据库原理<br/>BY509</p>
+        </td>
+      </tr>
+      <tr>
+        <td>上午3-4节<br/>(03,04小节)<br/>10:00-11:40</td>
+        <td>
+          <p title="课程学分：3.5&lt;br/&gt;课程属性：必修&lt;br/&gt;课程名称：计算机组成原理 CS101&lt;br/&gt;上课时间：第16周 星期一 [03-04]节&lt;br/&gt;上课地点：S4108人工智能实验室">计算机组成原..<br/>S4108人工智能实验室</p>
+        </td>
+      </tr>
+      <tr>
+        <td>下午5-6节<br/>(05,06小节)<br/>14:00-15:40</td>
+        <td></td><td></td><td></td>
+        <td>
+          <p title="课程学分：6&lt;br/&gt;课程属性：必修&lt;br/&gt;课程名称：高等数学AⅡ&lt;br/&gt;上课时间：第16周 星期四 [05-06-07-08]节&lt;br/&gt;上课地点：10107">高等数学AⅡ..</p>
+        </td>
+      </tr>
+    </table>
+    """
+
+    result = HUEConnector().parse_schedule_html(html)
+
+    assert len(result.courses) == 3
+    assert result.courses[0].name == "数据库原理"
+    assert result.courses[0].code == ""
+    assert result.courses[0].room == "BY509"
+    assert result.courses[0].weekday == 2
+    assert result.courses[0].lesson_start == 1
+    assert result.courses[0].lesson_end == 2
+    assert result.courses[0].raw_weeks == "16(周)"
+    assert result.courses[0].parsed_weeks == [16]
+    assert result.courses[1].name == "计算机组成原理"
+    assert result.courses[1].code == "CS101"
+    assert result.courses[1].room == "S4108"
+    assert result.courses[1].weekday == 1
+    assert result.courses[1].lesson_start == 3
+    assert result.courses[1].lesson_end == 4
+    assert result.courses[2].name == "高等数学AⅡ"
+    assert result.courses[2].lesson_start == 5
+    assert result.courses[2].lesson_end == 8
 
 
 def test_parser_keeps_roman_numeral_suffix_in_course_name():
