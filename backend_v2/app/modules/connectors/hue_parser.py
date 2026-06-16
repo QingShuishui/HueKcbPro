@@ -96,25 +96,28 @@ def parse_home_schedule_table(table) -> list[NormalizedCourse]:
                 course_name, course_code = split_course_name_code(raw_name)
                 raw_time = fields.get("上课时间", "")
                 title_weekday = _parse_home_weekday(raw_time)
-                lesson_start, lesson_end = _parse_home_lesson_span(
+                lesson_blocks = _parse_home_lesson_blocks(
                     raw_time,
                     fallback=(fallback_lesson_start, fallback_lesson_end),
                 )
                 raw_weeks = _parse_home_weeks(raw_time)
 
-                courses.append(
-                    NormalizedCourse(
-                        name=course_name,
-                        code=course_code,
-                        teacher="",
-                        room=extract_location_code(fields.get("上课地点", "").strip()),
-                        weekday=title_weekday or day_idx + 1,
-                        lesson_start=lesson_start,
-                        lesson_end=lesson_end,
-                        raw_weeks=raw_weeks,
-                        parsed_weeks=parse_weeks(raw_weeks),
+                for lesson_start, lesson_end in lesson_blocks:
+                    courses.append(
+                        NormalizedCourse(
+                            name=course_name,
+                            code=course_code,
+                            teacher="",
+                            room=extract_location_code(
+                                fields.get("上课地点", "").strip()
+                            ),
+                            weekday=title_weekday or day_idx + 1,
+                            lesson_start=lesson_start,
+                            lesson_end=lesson_end,
+                            raw_weeks=raw_weeks,
+                            parsed_weeks=parse_weeks(raw_weeks),
+                        )
                     )
-                )
 
     return courses
 
@@ -147,15 +150,27 @@ def _parse_home_weekday(raw_time: str) -> int | None:
     return None
 
 
-def _parse_home_lesson_span(raw_time: str, *, fallback: tuple[int, int]) -> tuple[int, int]:
+def _parse_home_lesson_blocks(
+    raw_time: str,
+    *,
+    fallback: tuple[int, int],
+) -> list[tuple[int, int]]:
     match = re.search(r"\[([0-9,-]+)\]节", raw_time)
     if not match:
-        return fallback
+        return [fallback]
 
     lesson_numbers = [int(item) for item in re.findall(r"\d+", match.group(1))]
     if not lesson_numbers:
-        return fallback
-    return min(lesson_numbers), max(lesson_numbers)
+        return [fallback]
+
+    lesson_start = min(lesson_numbers)
+    lesson_end = max(lesson_numbers)
+    lesson_blocks = [
+        block
+        for block in LESSON_SPANS
+        if block[0] >= lesson_start and block[1] <= lesson_end
+    ]
+    return lesson_blocks or [(lesson_start, lesson_end)]
 
 
 def _parse_home_weeks(raw_time: str) -> str:

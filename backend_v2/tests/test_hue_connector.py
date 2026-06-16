@@ -409,7 +409,7 @@ def test_parser_reads_home_kb_table_fallback_html():
 
     result = HUEConnector().parse_schedule_html(html)
 
-    assert len(result.courses) == 3
+    assert len(result.courses) == 4
     assert result.courses[0].name == "数据库原理"
     assert result.courses[0].code == ""
     assert result.courses[0].room == "BY509"
@@ -426,7 +426,42 @@ def test_parser_reads_home_kb_table_fallback_html():
     assert result.courses[1].lesson_end == 4
     assert result.courses[2].name == "高等数学AⅡ"
     assert result.courses[2].lesson_start == 5
-    assert result.courses[2].lesson_end == 8
+    assert result.courses[2].lesson_end == 6
+    assert result.courses[3].name == "高等数学AⅡ"
+    assert result.courses[3].lesson_start == 7
+    assert result.courses[3].lesson_end == 8
+
+
+def test_parser_splits_full_day_home_course_into_standard_lesson_rows():
+    html = """
+    <table id="tab1" class="table kb_table">
+      <tr>
+        <th>周/节次</th>
+        <th>星期一</th>
+        <th>星期二</th>
+        <th>星期三</th>
+        <th>星期四</th>
+        <th>星期五</th>
+        <th>星期六</th>
+        <th>星期日</th>
+      </tr>
+      <tr>
+        <td>上午1-2节<br/>(01,02小节)<br/>08:00-09:40</td>
+        <td>
+          <p title="课程名称：专业项目实训Ⅱ&lt;br/&gt;上课时间：第17周 星期一 [01-02-03-04-05-06-07-08]节&lt;br/&gt;上课地点：S4111">专业项目实训Ⅱ<br/>S4111</p>
+        </td>
+      </tr>
+    </table>
+    """
+
+    result = HUEConnector().parse_schedule_html(html)
+
+    assert [
+        (course.lesson_start, course.lesson_end) for course in result.courses
+    ] == [(1, 2), (3, 4), (5, 6), (7, 8)]
+    assert {course.name for course in result.courses} == {"专业项目实训Ⅱ"}
+    assert {course.weekday for course in result.courses} == {1}
+    assert {course.raw_weeks for course in result.courses} == {"17(周)"}
 
 
 def test_parser_keeps_roman_numeral_suffix_in_course_name():
