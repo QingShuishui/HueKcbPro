@@ -144,20 +144,24 @@ class HUEConnector(AcademicConnector):
         today = today or datetime.now(timezone(timedelta(hours=8))).date()
         for probe_date in _calendar_probe_dates(today):
             week_info = self._fetch_calendar_week(session, probe_date)
-            if week_info is None:
-                continue
-            week_number, total_weeks = week_info
-            start_date = probe_date - timedelta(
-                days=probe_date.weekday() + (week_number - 1) * 7
-            )
-            return start_date, max(total_weeks, MINIMUM_SEMESTER_WEEKS)
+            if week_info is not None:
+                week_number, total_weeks = week_info
+                start_date = probe_date - timedelta(
+                    days=probe_date.weekday() + (week_number - 1) * 7
+                )
+                return start_date, max(total_weeks, MINIMUM_SEMESTER_WEEKS)
+
+            # HUE's preview does not always include the teaching-week label.
+            # A date with courses still identifies its displayed academic week.
+            if self._fetch_calendar_has_courses(session, probe_date):
+                return probe_date - timedelta(days=probe_date.weekday()), MINIMUM_SEMESTER_WEEKS
         return None
 
-    def _fetch_calendar_week(
+    def _fetch_calendar_preview_html(
         self,
         session: requests.Session,
         probe_date: date,
-    ) -> tuple[int, int] | None:
+    ) -> str | None:
         try:
             response = session.post(
                 f"{self.base_url}/jsxsd/framework/main_index_loadkb.jsp",
@@ -165,11 +169,27 @@ class HUEConnector(AcademicConnector):
                 headers=FALLBACK_REQUEST_HEADERS.copy(),
                 timeout=10,
             )
-        except Exception:
+        except requests.RequestException:
             return None
         if getattr(response, "status_code", 0) != 200:
             return None
-        return _parse_calendar_week(response.text)
+        return response.text
+
+    def _fetch_calendar_week(
+        self,
+        session: requests.Session,
+        probe_date: date,
+    ) -> tuple[int, int] | None:
+        html = self._fetch_calendar_preview_html(session, probe_date)
+        return _parse_calendar_week(html) if html is not None else None
+
+    def _fetch_calendar_has_courses(
+        self,
+        session: requests.Session,
+        probe_date: date,
+    ) -> bool:
+        html = self._fetch_calendar_preview_html(session, probe_date)
+        return bool(self.parse_schedule_html(html).courses) if html is not None else False
 
     def _fetch_default_schedule(self, session: requests.Session) -> NormalizedSchedule | None:
         settings = get_settings()

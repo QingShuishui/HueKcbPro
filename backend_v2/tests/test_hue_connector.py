@@ -85,6 +85,26 @@ def test_calendar_discovery_keeps_system_total_weeks(monkeypatch):
     )
 
 
+def test_calendar_discovery_uses_first_preview_week_with_courses(monkeypatch):
+    connector = HUEConnector()
+    monkeypatch.setattr(
+        connector,
+        "_fetch_calendar_week",
+        lambda _session, _probe_date: None,
+    )
+    monkeypatch.setattr(
+        connector,
+        "_fetch_calendar_has_courses",
+        lambda _session, probe_date: probe_date == date(2026, 8, 31),
+        raising=False,
+    )
+
+    assert connector._discover_academic_calendar(Mock(), today=date(2026, 9, 1)) == (
+        date(2026, 8, 31),
+        18,
+    )
+
+
 def test_calendar_discovery_ignores_today_from_a_previous_term(monkeypatch):
     connector = HUEConnector()
 
