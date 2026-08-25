@@ -99,11 +99,13 @@ jobs:
           echo "SSH_OPTS=-o StrictHostKeyChecking=accept-new" >> "$GITHUB_ENV"
 
       - name: Ensure release directories exist
+        continue-on-error: true
         run: |
           ssh ${SSH_OPTS} -p "${{ secrets.DEPLOY_PORT }}" "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" \
             "mkdir -p '${{ secrets.DEPLOY_BASE_PATH }}/downloads' '${{ secrets.DEPLOY_BASE_PATH }}/storage'"
 
       - name: Upload APK to server
+        continue-on-error: true
         run: |
           scp ${SSH_OPTS} -P "${{ secrets.DEPLOY_PORT }}" \
             "HueKcbPro-${{ inputs.version }}+${{ inputs.build_number }}.apk" \
@@ -141,7 +143,16 @@ jobs:
               json.dump(payload, fh, ensure_ascii=False, indent=2)
           PY
 
+      - name: Upload update metadata to GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "app-v${{ inputs.version }}" \
+            "latest-android.json" \
+            --clobber
+
       - name: Upload latest update metadata to server
+        continue-on-error: true
         run: |
           scp ${SSH_OPTS} -P "${{ secrets.DEPLOY_PORT }}" \
             "latest-android.json" \
