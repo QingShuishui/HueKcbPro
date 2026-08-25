@@ -12,6 +12,10 @@ def test_current_schedule_returns_stale_payload_when_cache_exists(monkeypatch):
         "read_current_schedule",
         lambda user_id: {
             "semester_label": "2026春",
+            "semester_start_date": "2026-09-07",
+            "semester_end_date": "2027-01-31",
+            "total_weeks": 22,
+            "current_week": 1,
             "generated_at": "2026-04-04T10:00:00Z",
             "is_stale": True,
             "last_synced_at": "2026-04-04T08:00:00Z",
@@ -27,6 +31,10 @@ def test_current_schedule_returns_stale_payload_when_cache_exists(monkeypatch):
 
     assert response.status_code == 200
     assert response.json()["is_stale"] is True
+    assert response.json()["semester_start_date"] == "2026-09-07"
+    assert response.json()["current_week"] == 1
+    assert response.json()["semester_end_date"] == "2027-01-31"
+    assert response.json()["total_weeks"] == 22
 
 
 def test_current_schedule_returns_course_code(monkeypatch):
@@ -37,6 +45,8 @@ def test_current_schedule_returns_course_code(monkeypatch):
         "read_current_schedule",
         lambda user_id: {
             "semester_label": "2026春",
+            "semester_start_date": "2026-09-07",
+            "current_week": 1,
             "generated_at": "2026-04-04T10:00:00Z",
             "is_stale": False,
             "last_synced_at": "2026-04-04T08:00:00Z",

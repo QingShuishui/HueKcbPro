@@ -65,6 +65,9 @@ def persist_binding_schedule(db, binding: AcademicBinding, password: str, connec
         binding.user_id,
         {
             "semester_label": normalized_schedule["semester_label"],
+            "semester_start_date": normalized_schedule["semester_start_date"],
+            "semester_end_date": normalized_schedule["semester_end_date"],
+            "total_weeks": normalized_schedule["total_weeks"],
             "generated_at": normalized_schedule["generated_at"],
             "is_stale": False,
             "last_synced_at": sync_state.last_synced_at,

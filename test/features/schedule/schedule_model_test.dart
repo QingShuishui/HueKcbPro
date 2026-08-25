@@ -5,6 +5,10 @@ void main() {
   test('parses stale schedule response with course list', () {
     final schedule = Schedule.fromJson({
       'semester_label': '2026春',
+      'semester_start_date': '2026-09-07',
+      'semester_end_date': '2027-01-31',
+      'total_weeks': 22,
+      'current_week': 1,
       'generated_at': '2026-04-04T10:00:00Z',
       'is_stale': true,
       'last_synced_at': '2026-04-04T08:00:00Z',
@@ -24,6 +28,10 @@ void main() {
     });
 
     expect(schedule.isStale, isTrue);
+    expect(schedule.semesterStartDate, DateTime(2026, 9, 7));
+    expect(schedule.semesterEndDate, DateTime(2027, 1, 31));
+    expect(schedule.totalWeeks, 22);
+    expect(schedule.currentWeek, 1);
     expect(schedule.courses.single.code, 'SIT');
     expect(schedule.courses.single.room, 'S4409');
   });
@@ -31,6 +39,8 @@ void main() {
   test('derives available weeks and filters courses by selected week', () {
     final schedule = Schedule.fromJson({
       'semester_label': '2026春',
+      'semester_start_date': '2026-09-07',
+      'current_week': 1,
       'generated_at': '2026-04-04T10:00:00Z',
       'is_stale': false,
       'last_synced_at': '2026-04-04T08:00:00Z',

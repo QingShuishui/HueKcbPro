@@ -3,7 +3,11 @@ from unittest.mock import Mock, patch
 
 from app.modules.connectors import hue_connector
 from app.modules.connectors.base import NormalizedSchedule
-from app.modules.connectors.hue_connector import FALLBACK_WEEK_COUNT, HUEConnector
+from app.modules.connectors.hue_connector import (
+    FALLBACK_WEEK_COUNT,
+    HUEConnector,
+    _parse_calendar_week,
+)
 from app.modules.schedule.service import normalize_connector_schedule
 
 
@@ -48,9 +52,43 @@ def test_connector_fallback_checks_twenty_weeks_by_default():
     assert FALLBACK_WEEK_COUNT == 20
 
 
+def test_calendar_parser_reads_teaching_week_and_total_weeks():
+    assert _parse_calendar_week('<span>第 1 周</span> / 22 周') == (1, 22)
+    assert _parse_calendar_week('<div>当前日期不在教学周历内</div>') is None
+
+
+def test_calendar_discovery_calculates_start_and_minimum_end(monkeypatch):
+    connector = HUEConnector()
+    monkeypatch.setattr(
+        connector,
+        "_fetch_calendar_week",
+        lambda _session, probe_date: (1, 10) if probe_date == date(2026, 9, 1) else None,
+    )
+
+    assert connector._discover_academic_calendar(Mock(), today=date(2026, 9, 1)) == (
+        date(2026, 8, 31),
+        18,
+    )
+
+
+def test_calendar_discovery_keeps_system_total_weeks(monkeypatch):
+    connector = HUEConnector()
+    monkeypatch.setattr(
+        connector,
+        "_fetch_calendar_week",
+        lambda _session, _probe_date: (2, 22),
+    )
+
+    assert connector._discover_academic_calendar(Mock(), today=date(2026, 9, 1)) == (
+        date(2026, 8, 24),
+        22,
+    )
+
+
 @patch("app.modules.connectors.hue_connector.ddddocr.DdddOcr")
 @patch("app.modules.connectors.hue_connector.requests.Session")
-def test_connector_uses_supplied_credentials(session_cls, ocr_cls):
+def test_connector_uses_supplied_credentials(session_cls, ocr_cls, monkeypatch):
+    monkeypatch.setattr(HUEConnector, "_discover_academic_calendar", lambda *_args, **_kwargs: None)
     session = session_cls.return_value
     ocr_cls.return_value.classification.return_value = "1234"
 
@@ -91,9 +129,8 @@ def test_connector_uses_supplied_credentials(session_cls, ocr_cls):
         response_home,
         response_sess,
         response_captcha,
-        response_table,
     ]
-    session.post.side_effect = [response_login]
+    session.post.side_effect = [response_login, response_table]
 
     connector = HUEConnector()
     connector.fetch_schedule("demo_student_id", "pw123")
@@ -104,7 +141,8 @@ def test_connector_uses_supplied_credentials(session_cls, ocr_cls):
 
 @patch("app.modules.connectors.hue_connector.ddddocr.DdddOcr")
 @patch("app.modules.connectors.hue_connector.requests.Session")
-def test_connector_retries_transient_login_redirect_failures(session_cls, ocr_cls):
+def test_connector_retries_transient_login_redirect_failures(session_cls, ocr_cls, monkeypatch):
+    monkeypatch.setattr(HUEConnector, "_discover_academic_calendar", lambda *_args, **_kwargs: None)
     sessions = [Mock(), Mock(), Mock()]
     session_cls.side_effect = sessions
     ocr_cls.return_value.classification.return_value = "1234"
@@ -119,14 +157,13 @@ def test_connector_retries_transient_login_redirect_failures(session_cls, ocr_cl
         _response(),
         _response(text="abc#111"),
         _response(content=b"img"),
-        _response(text=_schedule_html()),
     ]
 
     failed_login = _response(url="https://jwxt.hue.edu.cn/Logon.do?method=logon")
     successful_login = _response(url="https://jwxt.hue.edu.cn/xsMain.jsp")
     sessions[0].post.return_value = failed_login
     sessions[1].post.return_value = failed_login
-    sessions[2].post.return_value = successful_login
+    sessions[2].post.side_effect = [successful_login, _response(text=_schedule_html())]
 
     result = HUEConnector().fetch_schedule("demo_student_id", "pw123")
 
@@ -134,12 +171,19 @@ def test_connector_retries_transient_login_redirect_failures(session_cls, ocr_cl
     assert session_cls.call_count == 3
     assert sessions[0].post.call_count == 1
     assert sessions[1].post.call_count == 1
-    assert sessions[2].post.call_count == 1
+    assert sessions[2].post.call_count == 2
 
 
 @patch("app.modules.connectors.hue_connector.ddddocr.DdddOcr")
 @patch("app.modules.connectors.hue_connector.requests.Session")
-def test_connector_uses_default_schedule_endpoint(session_cls, ocr_cls):
+def test_connector_posts_term_id_to_default_schedule_endpoint(
+    session_cls, ocr_cls, monkeypatch
+):
+    monkeypatch.setattr(HUEConnector, "_discover_academic_calendar", lambda *_args, **_kwargs: None)
+    monkeypatch.setenv("ACADEMIC_TERM_ID", "2026-2027-1")
+    from app.core.settings import get_settings
+
+    get_settings.cache_clear()
     session = session_cls.return_value
     ocr_cls.return_value.classification.return_value = "1234"
 
@@ -147,20 +191,31 @@ def test_connector_uses_default_schedule_endpoint(session_cls, ocr_cls):
         _response(),
         _response(text="abc#111"),
         _response(content=b"img"),
+    ]
+    session.post.side_effect = [
+        _response(url="https://jwxt.hue.edu.cn/xsMain.jsp"),
         _response(
             text=_schedule_html(semester="2025秋"),
             url="https://jwxt.hue.edu.cn/jsxsd/xskb/xskb_list.do",
         ),
     ]
-    session.post.side_effect = [_response(url="https://jwxt.hue.edu.cn/xsMain.jsp")]
 
     result = HUEConnector().fetch_schedule("demo_student_id", "pw123")
 
     assert result.semester_label == "2025秋"
-    assert len(session.post.call_args_list) == 1
-    schedule_call = session.get.call_args_list[3]
+    assert len(session.post.call_args_list) == 2
+    schedule_call = session.post.call_args_list[1]
     assert schedule_call.args[0] == "https://jwxt.hue.edu.cn/jsxsd/xskb/xskb_list.do"
-    assert "data" not in schedule_call.kwargs
+    assert schedule_call.kwargs["data"] == {
+        "jx0404id": "",
+        "cj0701id": "",
+        "zc": "",
+        "demo": "",
+        "xnxq01id": "2026-2027-1",
+        "sfFD": "1",
+    }
+
+    get_settings.cache_clear()
 
 
 @patch("app.modules.connectors.hue_connector.ddddocr.DdddOcr")
@@ -168,9 +223,18 @@ def test_connector_uses_default_schedule_endpoint(session_cls, ocr_cls):
 def test_connector_falls_back_to_weekly_endpoint_when_default_schedule_is_empty(
     session_cls, ocr_cls, monkeypatch
 ):
+    monkeypatch.setenv("ACADEMIC_SEMESTER_START_DATE", "2026-03-02")
+    from app.core.settings import get_settings
+
+    get_settings.cache_clear()
     session = session_cls.return_value
     ocr_cls.return_value.classification.return_value = "1234"
     monkeypatch.setattr("app.modules.connectors.hue_connector.FALLBACK_WEEK_COUNT", 2)
+    monkeypatch.setattr(
+        HUEConnector,
+        "_discover_academic_calendar",
+        lambda *_args, **_kwargs: (date(2026, 8, 31), 22),
+    )
     fallback_calls = []
 
     def fake_week(self, _session, week, request_date):
@@ -184,12 +248,14 @@ def test_connector_falls_back_to_weekly_endpoint_when_default_schedule_is_empty(
         _response(),
         _response(text="abc#111"),
         _response(content=b"img"),
+    ]
+    session.post.side_effect = [
+        _response(url="https://jwxt.hue.edu.cn/xsMain.jsp"),
         _response(
             text="<div id='timetableDiv'>2026春</div><table id='kbtable'></table>",
             url="https://jwxt.hue.edu.cn/jsxsd/xskb/xskb_list.do",
         ),
     ]
-    session.post.side_effect = [_response(url="https://jwxt.hue.edu.cn/xsMain.jsp")]
 
     result = HUEConnector().fetch_schedule("demo_student_id", "pw123")
 
@@ -198,7 +264,11 @@ def test_connector_falls_back_to_weekly_endpoint_when_default_schedule_is_empty(
     assert result.courses[0].room == "S101, S102"
     assert result.courses[0].raw_weeks == "1-2(周)"
     assert result.courses[0].parsed_weeks == [1, 2]
-    assert sorted(fallback_calls) == [(1, "2026-03-02"), (2, "2026-03-09")]
+    assert sorted(fallback_calls) == [(1, "2026-08-31"), (2, "2026-09-07")]
+    assert result.semester_start_date == "2026-08-31"
+    assert result.semester_end_date == "2027-01-31"
+    assert result.total_weeks == 22
+    get_settings.cache_clear()
 
 
 def test_fetch_fallback_week_posts_week_date_with_authenticated_session(monkeypatch):
@@ -251,6 +321,9 @@ def test_fallback_result_normalizes_to_main_schedule_payload_shape(monkeypatch):
 
     assert set(payload) == {
         "semester_label",
+        "semester_start_date",
+        "semester_end_date",
+        "total_weeks",
         "generated_at",
         "courses",
         "schedule_hash",

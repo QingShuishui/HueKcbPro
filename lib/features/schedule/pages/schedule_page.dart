@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
@@ -11,10 +12,10 @@ import '../controllers/schedule_controller.dart';
 import '../models/schedule.dart';
 import '../widgets/schedule_grid.dart';
 
-final _semesterStartDate = DateTime(2026, 3, 2);
+final _defaultSemesterStartDate = DateTime(2026, 3, 2);
 const _weekTileExtent = 132.0;
 const _minWeek = 1;
-const _maxWeek = 18;
+const _minimumWeekCount = 18;
 const _maxScheduleTextScale = 1.2;
 const _debugRefreshTimeout = Duration(seconds: 10);
 
@@ -43,7 +44,10 @@ class SchedulePage extends ConsumerStatefulWidget {
 class _SchedulePageState extends ConsumerState<SchedulePage>
     with WidgetsBindingObserver {
   late DateTime _today = _normalizeDate(widget.initialDate ?? DateTime.now());
-  late int _selectedWeek = _weekForDate(_today);
+  late int _selectedWeek = _weekForDate(
+    _today,
+    _semesterStartDateForSchedule(widget.schedule),
+  );
   late final ScrollController _weekStripController = ScrollController(
     initialScrollOffset: (_selectedWeek - 1) * _weekTileExtent,
   );
@@ -64,6 +68,8 @@ class _SchedulePageState extends ConsumerState<SchedulePage>
   int? _programmaticWeekTarget;
   ScheduleRefreshWarning? _visibleWarningPopup;
   Timer? _warningPopupTimer;
+  DateTime? _lastAppliedSemesterStartDate;
+  int? _lastAppliedCurrentWeek;
 
   @override
   void initState() {
@@ -202,7 +208,10 @@ class _SchedulePageState extends ConsumerState<SchedulePage>
     required bool followCurrentWeek,
     bool syncPendingDebugDate = false,
   }) async {
-    final previousCurrentWeek = _weekForDate(_today);
+    final previousCurrentWeek = _weekForDate(
+      _today,
+      _semesterStartDateForSchedule(widget.schedule),
+    );
     final latestToday = _normalizeDate(
       _currentMoment(syncPendingDebugDate: syncPendingDebugDate),
     );
@@ -227,7 +236,12 @@ class _SchedulePageState extends ConsumerState<SchedulePage>
     });
 
     if (shouldFollowCurrentWeek) {
-      await _jumpToWeek(_weekForDate(latestToday));
+      await _jumpToWeek(
+        _weekForDate(
+          latestToday,
+          _semesterStartDateForSchedule(widget.schedule),
+        ),
+      );
     }
   }
 
@@ -259,7 +273,9 @@ class _SchedulePageState extends ConsumerState<SchedulePage>
 
   Future<void> _jumpToToday() async {
     await _syncCurrentDate(followCurrentWeek: false);
-    await _jumpToWeek(_weekForDate(_today));
+    await _jumpToWeek(
+      _weekForDate(_today, _semesterStartDateForSchedule(widget.schedule)),
+    );
   }
 
   void _setDebugDateSyncImmediately(bool value) {
@@ -284,7 +300,10 @@ class _SchedulePageState extends ConsumerState<SchedulePage>
   Future<void> _setDebugDate(DateTime date) async {
     final normalized = _normalizeDate(date);
     if (_debugDateSyncImmediately) {
-      final previousCurrentWeek = _weekForDate(_today);
+      final previousCurrentWeek = _weekForDate(
+        _today,
+        _semesterStartDateForSchedule(widget.schedule),
+      );
       final shouldFollowCurrentWeek = _selectedWeek == previousCurrentWeek;
       setState(() {
         _configuredDebugDate = normalized;
@@ -292,7 +311,12 @@ class _SchedulePageState extends ConsumerState<SchedulePage>
         _today = normalized;
       });
       if (shouldFollowCurrentWeek) {
-        await _jumpToWeek(_weekForDate(normalized));
+        await _jumpToWeek(
+          _weekForDate(
+            normalized,
+            _semesterStartDateForSchedule(widget.schedule),
+          ),
+        );
       }
       return;
     }
@@ -303,7 +327,7 @@ class _SchedulePageState extends ConsumerState<SchedulePage>
   }
 
   Future<void> _jumpToWeek(int week) async {
-    final clampedWeek = week.clamp(_minWeek, _maxWeek);
+    final clampedWeek = week.clamp(_minWeek, _maxWeekForCurrentSchedule());
     if (clampedWeek == _selectedWeek) {
       return;
     }
@@ -355,17 +379,43 @@ class _SchedulePageState extends ConsumerState<SchedulePage>
     }
   }
 
-  DateTime _weekStartForWeek(int week) {
-    return _semesterStartDate.add(Duration(days: (week - 1) * 7));
+  DateTime _weekStartForWeek(int week, DateTime semesterStartDate) {
+    return semesterStartDate.add(Duration(days: (week - 1) * 7));
   }
 
-  int _weekForDate(DateTime date) {
+  static DateTime _semesterStartDateForSchedule(Schedule? schedule) {
+    return schedule?.semesterStartDate ?? _defaultSemesterStartDate;
+  }
+
+  static int _maxWeekForSchedule(Schedule? schedule) {
+    if (schedule == null) {
+      return _minimumWeekCount;
+    }
+    final courseWeeks = schedule.availableWeeks;
+    final lastCourseWeek = courseWeeks.isEmpty ? 0 : courseWeeks.last;
+    final semesterWeeks = math.max(
+      _minimumWeekCount,
+      schedule.totalWeeks ?? _minimumWeekCount,
+    );
+    return math.min(
+      semesterWeeks,
+      math.max(_minimumWeekCount, lastCourseWeek),
+    );
+  }
+
+  int _maxWeekForCurrentSchedule() {
+    return _maxWeekForSchedule(
+      widget.schedule ?? ref.read(scheduleControllerProvider).valueOrNull,
+    );
+  }
+
+  int _weekForDate(DateTime date, DateTime semesterStartDate) {
     final normalized = _normalizeDate(date);
-    final daysDiff = normalized.difference(_semesterStartDate).inDays;
+    final daysDiff = normalized.difference(semesterStartDate).inDays;
     if (daysDiff < 0) {
       return _minWeek;
     }
-    return ((daysDiff ~/ 7) + 1).clamp(_minWeek, _maxWeek);
+    return ((daysDiff ~/ 7) + 1).clamp(_minWeek, _maxWeekForCurrentSchedule());
   }
 
   static DateTime _normalizeDate(DateTime value) {
@@ -379,6 +429,10 @@ class _SchedulePageState extends ConsumerState<SchedulePage>
       generatedAt: syncedAt,
       isStale: schedule.isStale,
       lastSyncedAt: syncedAt,
+      semesterStartDate: schedule.semesterStartDate,
+      semesterEndDate: schedule.semesterEndDate,
+      totalWeeks: schedule.totalWeeks,
+      currentWeek: schedule.currentWeek,
       courses: schedule.courses,
     );
   }
@@ -408,7 +462,7 @@ class _SchedulePageState extends ConsumerState<SchedulePage>
     final textDirection = Directionality.of(context);
     final theme = Theme.of(context);
     final measuredHeight =
-        List.generate(_maxWeek, (index) {
+        List.generate(_maxWeekForSchedule(schedule), (index) {
           final weekSchedule = schedule.filterByWeek(index + 1);
           return ScheduleGrid.estimatedHeight(
             schedule: weekSchedule,
@@ -430,6 +484,33 @@ class _SchedulePageState extends ConsumerState<SchedulePage>
       return ScheduleRefreshWarning.staleCache;
     }
     return ScheduleRefreshWarning.none;
+  }
+
+  void _syncWeekSelectionFromScheduleMetadata(Schedule? schedule) {
+    final semesterStartDate = schedule?.semesterStartDate;
+    final currentWeek = schedule?.currentWeek;
+    if (semesterStartDate == null || currentWeek == null) {
+      return;
+    }
+    if (_lastAppliedSemesterStartDate == semesterStartDate &&
+        _lastAppliedCurrentWeek == currentWeek) {
+      return;
+    }
+    _lastAppliedSemesterStartDate = semesterStartDate;
+    _lastAppliedCurrentWeek = currentWeek;
+
+    final targetWeek = currentWeek
+        .clamp(_minWeek, _maxWeekForSchedule(schedule))
+        .toInt();
+    if (targetWeek == _selectedWeek) {
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      unawaited(_jumpToWeek(targetWeek));
+    });
   }
 
   String _warningMessage(ScheduleRefreshWarning warning) {
@@ -472,10 +553,15 @@ class _SchedulePageState extends ConsumerState<SchedulePage>
         ? ref.watch(scheduleRefreshWarningProvider)
         : _warningForPinnedSchedule(widget.schedule);
     final isLoading = widget.schedule == null && scheduleState.isLoading;
-    final currentWeek = _weekForDate(_today);
+    final semesterStartDate = _semesterStartDateForSchedule(currentSchedule);
+    final maxWeek = _maxWeekForSchedule(currentSchedule);
+    final currentWeek =
+        currentSchedule?.currentWeek ?? _weekForDate(_today, semesterStartDate);
     final refreshLabel = currentSchedule == null
         ? null
         : _formatRefreshTime(currentSchedule);
+
+    _syncWeekSelectionFromScheduleMetadata(currentSchedule);
 
     if ((widget.schedule == null || widget.isDebugMode) &&
         currentSchedule != null) {
@@ -601,6 +687,8 @@ class _SchedulePageState extends ConsumerState<SchedulePage>
                           child: _CompactTopBar(
                             selectedWeek: _selectedWeek,
                             currentWeek: currentWeek,
+                            semesterStartDate: semesterStartDate,
+                            maxWeek: maxWeek,
                             controller: _weekStripController,
                             onWeekTap: _jumpToWeek,
                           ),
@@ -668,7 +756,7 @@ class _SchedulePageState extends ConsumerState<SchedulePage>
                             onPageChanged: (index) {
                               unawaited(_handlePageChanged(index));
                             },
-                            itemCount: _maxWeek,
+                            itemCount: maxWeek,
                             itemBuilder: (context, index) {
                               final week = index + 1;
                               final weekSchedule = currentSchedule.filterByWeek(
@@ -705,7 +793,10 @@ class _SchedulePageState extends ConsumerState<SchedulePage>
                                       child: ScheduleGrid(
                                         key: ValueKey('schedule-week-$week'),
                                         schedule: weekSchedule,
-                                        weekStartDate: _weekStartForWeek(week),
+                                        weekStartDate: _weekStartForWeek(
+                                          week,
+                                          semesterStartDate,
+                                        ),
                                         currentDate: _today,
                                         borderRadius: borderRadius,
                                       ),
@@ -925,12 +1016,16 @@ class _CompactTopBar extends StatelessWidget {
   const _CompactTopBar({
     required this.selectedWeek,
     required this.currentWeek,
+    required this.semesterStartDate,
+    required this.maxWeek,
     required this.controller,
     required this.onWeekTap,
   });
 
   final int selectedWeek;
   final int currentWeek;
+  final DateTime semesterStartDate;
+  final int maxWeek;
   final ScrollController controller;
   final ValueChanged<int> onWeekTap;
 
@@ -943,7 +1038,7 @@ class _CompactTopBar extends StatelessWidget {
         controller: controller,
         scrollDirection: Axis.horizontal,
         itemExtent: _weekTileExtent,
-        itemCount: _maxWeek,
+        itemCount: maxWeek,
         itemBuilder: (context, index) {
           final week = index + 1;
           return Padding(
@@ -951,6 +1046,7 @@ class _CompactTopBar extends StatelessWidget {
             child: _WeekTile(
               key: ValueKey('week-tile-$week'),
               week: week,
+              semesterStartDate: semesterStartDate,
               isCurrentWeek: week == currentWeek,
               isSelected: week == selectedWeek,
               onTap: () => onWeekTap(week),
@@ -966,19 +1062,21 @@ class _WeekTile extends StatelessWidget {
   const _WeekTile({
     super.key,
     required this.week,
+    required this.semesterStartDate,
     required this.isCurrentWeek,
     required this.isSelected,
     required this.onTap,
   });
 
   final int week;
+  final DateTime semesterStartDate;
   final bool isCurrentWeek;
   final bool isSelected;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final start = _semesterStartDate.add(Duration(days: (week - 1) * 7));
+    final start = semesterStartDate.add(Duration(days: (week - 1) * 7));
     final end = start.add(const Duration(days: 6));
     final backgroundColor = isSelected
         ? const Color(0xFFFCE7F3)

@@ -15,6 +15,9 @@ void main() {
   testWidgets('shows week header and refresh time', (tester) async {
     final schedule = Schedule(
       semesterLabel: '2026春',
+      semesterStartDate: DateTime(2026, 9, 7),
+      totalWeeks: 22,
+      currentWeek: 1,
       generatedAt: DateTime(2026, 4, 4, 10),
       isStale: true,
       lastSyncedAt: DateTime(2026, 4, 4, 8),
@@ -38,7 +41,7 @@ void main() {
         child: MaterialApp(
           home: SchedulePage(
             schedule: schedule,
-            initialDate: DateTime(2026, 3, 2),
+            initialDate: DateTime(2026, 9, 7),
           ),
         ),
       ),
@@ -51,6 +54,96 @@ void main() {
     expect(find.textContaining('S4409'), findsOneWidget);
     expect(find.textContaining('学号：'), findsNothing);
     expect(find.text('第1周'), findsWidgets);
+    expect(find.text('9.7-9.13'), findsOneWidget);
+  });
+
+  testWidgets(
+    'uses semester start date from schedule metadata for current week',
+    (tester) async {
+      final schedule = Schedule(
+        semesterLabel: '2026秋',
+        semesterStartDate: DateTime(2026, 9, 7),
+        totalWeeks: 22,
+        currentWeek: 3,
+        generatedAt: DateTime(2026, 9, 21, 8),
+        isStale: false,
+        lastSyncedAt: DateTime(2026, 9, 21, 8),
+        courses: const [
+          Course(
+            name: '编译原理',
+            code: 'BYYL',
+            teacher: '李四',
+            room: 'S3301',
+            weekday: 1,
+            lessonStart: 1,
+            lessonEnd: 2,
+            rawWeeks: '3-16(周)',
+            parsedWeeks: [3, 4, 5],
+          ),
+        ],
+      );
+
+      await tester.pumpWidget(
+        ProviderScope(
+          child: MaterialApp(
+            home: SchedulePage(
+              schedule: schedule,
+              initialDate: DateTime(2026, 9, 21),
+            ),
+          ),
+        ),
+      );
+
+      expect(find.text('第3周'), findsWidgets);
+      expect(find.text('9.21-9.27'), findsOneWidget);
+      expect(find.text('编译原理'), findsOneWidget);
+    },
+  );
+
+  testWidgets('keeps at least 18 weeks when later weeks have no courses', (
+    tester,
+  ) async {
+    final schedule = Schedule(
+      semesterLabel: '2026秋',
+      semesterStartDate: DateTime(2026, 8, 31),
+      totalWeeks: 22,
+      generatedAt: DateTime(2026, 9, 1),
+      isStale: false,
+      lastSyncedAt: DateTime(2026, 9, 1),
+      courses: const [
+        Course(
+          name: '软件测试技术',
+          code: 'SIT',
+          teacher: '张三',
+          room: 'S101',
+          weekday: 1,
+          lessonStart: 1,
+          lessonEnd: 2,
+          rawWeeks: '1-16(周)',
+          parsedWeeks: [1, 2, 16],
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MaterialApp(
+          home: SchedulePage(
+            schedule: schedule,
+            initialDate: DateTime(2026, 9, 1),
+          ),
+        ),
+      ),
+    );
+
+    await tester.drag(
+      find.byKey(const ValueKey('infinite-week-strip')),
+      const Offset(-2500, 0),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('week-tile-18')), findsOneWidget);
+    expect(find.byKey(const ValueKey('week-tile-19')), findsNothing);
   });
 
   testWidgets('shows retry action when schedule loading fails', (tester) async {

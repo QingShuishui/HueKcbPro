@@ -1,9 +1,10 @@
 import json
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, status
 
+from app.core.settings import get_settings
 from app.core.db import SessionLocal
 from app.core.security import get_current_user_id
 from app.models.academic_binding import AcademicBinding
@@ -16,6 +17,55 @@ from app.modules.tasks.schedule_tasks import sync_schedule
 router = APIRouter(prefix="/api/v1/schedule", tags=["schedule"])
 
 
+def _semester_start_date(payload: dict | None = None) -> str:
+    if payload is not None:
+        value = payload.get("semester_start_date")
+        if value:
+            return value
+    return get_settings().academic_semester_start_date
+
+
+def _total_weeks(payload: dict | None = None) -> int:
+    value = payload.get("total_weeks") if payload is not None else None
+    try:
+        return max(int(value or 18), 18)
+    except (TypeError, ValueError):
+        return 18
+
+
+def _semester_end_date(semester_start_date: str, total_weeks: int) -> str:
+    return (
+        datetime.strptime(semester_start_date, "%Y-%m-%d").date()
+        + timedelta(days=total_weeks * 7 - 1)
+    ).isoformat()
+
+
+def _current_week(semester_start_date: str, total_weeks: int) -> int:
+    start_date = datetime.strptime(semester_start_date, "%Y-%m-%d").date()
+    today = datetime.now(timezone(timedelta(hours=8))).date()
+    days_diff = (today - start_date).days
+    if days_diff < 0:
+        return 1
+    return min((days_diff // 7) + 1, total_weeks)
+
+
+def _schedule_response_payload(payload: dict) -> dict:
+    semester_start_date = _semester_start_date(payload)
+    total_weeks = _total_weeks(payload)
+    return {
+        "semester_label": payload["semester_label"],
+        "semester_start_date": semester_start_date,
+        "semester_end_date": payload.get("semester_end_date")
+        or _semester_end_date(semester_start_date, total_weeks),
+        "total_weeks": total_weeks,
+        "current_week": _current_week(semester_start_date, total_weeks),
+        "generated_at": payload["generated_at"],
+        "is_stale": payload["is_stale"],
+        "last_synced_at": payload.get("last_synced_at"),
+        "courses": payload["courses"],
+    }
+
+
 def read_current_schedule(user_id: int) -> dict:
     cached = get_cached_schedule(user_id)
     if cached is not None:
@@ -25,13 +75,16 @@ def read_current_schedule(user_id: int) -> dict:
             is_stale = (
                 datetime.now(timezone.utc) > datetime.fromisoformat(cache_expires_at)
             )
-        return {
+        return _schedule_response_payload({
             "semester_label": cached["semester_label"],
+            "semester_start_date": _semester_start_date(cached),
+            "semester_end_date": cached.get("semester_end_date"),
+            "total_weeks": cached.get("total_weeks"),
             "generated_at": cached["generated_at"],
             "is_stale": is_stale,
             "last_synced_at": cached.get("last_synced_at"),
             "courses": cached["courses"],
-        }
+        })
 
     with SessionLocal() as db:
         binding = db.query(AcademicBinding).filter_by(user_id=user_id).one_or_none()
@@ -54,6 +107,9 @@ def read_current_schedule(user_id: int) -> dict:
             )
         cache_payload = {
             "semester_label": payload["semester_label"],
+            "semester_start_date": _semester_start_date(payload),
+            "semester_end_date": payload.get("semester_end_date"),
+            "total_weeks": payload.get("total_weeks"),
             "generated_at": payload["generated_at"],
             "is_stale": is_stale,
             "last_synced_at": binding.sync_state.last_synced_at,
@@ -61,13 +117,7 @@ def read_current_schedule(user_id: int) -> dict:
             "courses": payload["courses"],
         }
         set_cached_schedule(user_id, cache_payload)
-        return {
-            "semester_label": cache_payload["semester_label"],
-            "generated_at": cache_payload["generated_at"],
-            "is_stale": cache_payload["is_stale"],
-            "last_synced_at": cache_payload["last_synced_at"],
-            "courses": cache_payload["courses"],
-        }
+        return _schedule_response_payload(cache_payload)
 
 
 def read_sync_status(user_id: int) -> dict:

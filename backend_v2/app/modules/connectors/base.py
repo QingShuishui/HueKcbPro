@@ -19,6 +19,9 @@ class NormalizedSchedule:
     semester_label: str
     generated_at: str
     courses: list[NormalizedCourse]
+    semester_start_date: str | None = None
+    semester_end_date: str | None = None
+    total_weeks: int | None = None
 
 
 class AcademicConnector:
