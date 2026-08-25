@@ -37,6 +37,84 @@ def test_monitoring_requires_admin_token(monkeypatch):
     assert response.status_code == 401
 
 
+def test_admin_can_force_refresh_the_global_semester_calendar(monkeypatch):
+    from app.modules.connectors.hue_connector import HUEConnector
+
+    monkeypatch.setenv("ADMIN_TOKEN", "secret")
+    monkeypatch.setenv("ACADEMIC_CALENDAR_PROBE_USERNAME", "calendar-probe")
+    monkeypatch.setenv("ACADEMIC_CALENDAR_PROBE_PASSWORD", "calendar-password")
+    get_settings.cache_clear()
+    monkeypatch.setattr(
+        HUEConnector,
+        "fetch_academic_calendar",
+        lambda _self, _username, _password: ("2026-08-31", "2027-01-31", 22),
+        raising=False,
+    )
+
+    client = TestClient(create_app())
+    response = client.post(
+        "/api/v1/admin/monitor/calendar/refresh",
+        headers={"X-Admin-Token": "secret"},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "semester_start_date": "2026-08-31",
+        "semester_end_date": "2027-01-31",
+        "total_weeks": 22,
+        "term_id": "2026-2027-1",
+    }
+
+
+def test_calendar_refresh_keeps_at_least_eighteen_weeks(monkeypatch):
+    from app.modules.connectors.hue_connector import HUEConnector
+
+    monkeypatch.setenv("ADMIN_TOKEN", "secret")
+    monkeypatch.setenv("ACADEMIC_CALENDAR_PROBE_USERNAME", "calendar-probe")
+    monkeypatch.setenv("ACADEMIC_CALENDAR_PROBE_PASSWORD", "calendar-password")
+    get_settings.cache_clear()
+    monkeypatch.setattr(
+        HUEConnector,
+        "fetch_academic_calendar",
+        lambda _self, _username, _password: ("2026-08-31", "2026-11-08", 10),
+    )
+
+    response = TestClient(create_app()).post(
+        "/api/v1/admin/monitor/calendar/refresh",
+        headers={"X-Admin-Token": "secret"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["total_weeks"] == 18
+    assert response.json()["semester_end_date"] == "2027-01-03"
+
+
+def test_calendar_refresh_records_a_safe_error_for_existing_calendar(monkeypatch):
+    from app.modules.connectors.hue_connector import HUEConnector
+
+    monkeypatch.setenv("ADMIN_TOKEN", "secret")
+    monkeypatch.setenv("ACADEMIC_CALENDAR_PROBE_USERNAME", "calendar-probe")
+    monkeypatch.setenv("ACADEMIC_CALENDAR_PROBE_PASSWORD", "calendar-password")
+    get_settings.cache_clear()
+    monkeypatch.setattr(
+        HUEConnector,
+        "fetch_academic_calendar",
+        lambda _self, _username, _password: ("2026-08-31", "2027-01-31", 22),
+    )
+    client = TestClient(create_app())
+    headers = {"X-Admin-Token": "secret"}
+    assert client.post("/api/v1/admin/monitor/calendar/refresh", headers=headers).status_code == 200
+
+    def fail_calendar_fetch(_self, _username, _password):
+        raise RuntimeError("HUE schedule preview is unavailable")
+
+    monkeypatch.setattr(HUEConnector, "fetch_academic_calendar", fail_calendar_fetch)
+    assert client.post("/api/v1/admin/monitor/calendar/refresh", headers=headers).status_code == 503
+
+    calendar = client.get("/api/v1/admin/monitor/calendar", headers=headers).json()["calendar"]
+    assert calendar["last_error"] == "HUE schedule preview is unavailable"
+
+
 def test_monitoring_reports_users_versions_and_schedule_pressure(monkeypatch):
     from app.modules.auth import service as auth_service
 

@@ -15,6 +15,8 @@ class Settings(BaseSettings):
     admin_token: str = ""
     academic_semester_start_date: str = "2026-09-07"
     academic_term_id: str = "2026-2027-1"
+    academic_calendar_probe_username: str = ""
+    academic_calendar_probe_password: str = ""
 
 
 @lru_cache

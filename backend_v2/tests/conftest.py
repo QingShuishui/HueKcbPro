@@ -24,7 +24,11 @@ import pytest  # noqa: E402
 
 @pytest.fixture(autouse=True)
 def reset_db():
+    from app.modules.calendar.service import clear_academic_calendar_cache
+
+    clear_academic_calendar_cache()
     Base.metadata.drop_all(engine)
     Base.metadata.create_all(engine)
     yield
+    clear_academic_calendar_cache()
     SessionLocal.remove() if hasattr(SessionLocal, "remove") else None

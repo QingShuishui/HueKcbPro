@@ -8,6 +8,8 @@ const usersBody = document.getElementById('users-body');
 const logsBody = document.getElementById('logs-body');
 const refreshButton = document.getElementById('refresh-button');
 const logoutButton = document.getElementById('logout-button');
+const calendarStatus = document.getElementById('calendar-status');
+const calendarRefreshButton = document.getElementById('calendar-refresh-button');
 
 let adminToken = '';
 
@@ -23,6 +25,13 @@ async function fetchJson(path) {
   if (!response.ok) {
     throw new Error(`请求失败：${response.status}`);
   }
+  return response.json();
+}
+
+async function postJson(path) {
+  const response = await fetch(path, { method: 'POST', headers: headers() });
+  if (response.status === 401) throw new Error('Token 无效');
+  if (!response.ok) throw new Error(`请求失败：${response.status}`);
   return response.json();
 }
 
@@ -102,16 +111,26 @@ function renderLogs(logs) {
     .join('');
 }
 
+function renderCalendar(calendar) {
+  if (!calendar) {
+    calendarStatus.textContent = '尚未检测。请配置探测账号后重新检测。';
+    return;
+  }
+  calendarStatus.textContent = `${calendar.term_id}：${calendar.semester_start_date} 至 ${calendar.semester_end_date}，共 ${calendar.total_weeks} 周；检测于 ${formatTime(calendar.detected_at)}`;
+}
+
 async function loadDashboard() {
-  const [summary, users, logs] = await Promise.all([
+  const [summary, users, logs, calendar] = await Promise.all([
     fetchJson('/api/v1/admin/monitor/summary'),
     fetchJson('/api/v1/admin/monitor/users'),
     fetchJson('/api/v1/admin/monitor/schedule-logs?limit=100'),
+    fetchJson('/api/v1/admin/monitor/calendar'),
   ]);
 
   renderMetrics(summary);
   renderUsers(users.users);
   renderLogs(logs.logs);
+  renderCalendar(calendar.calendar);
 }
 
 function enterDashboard() {
@@ -144,6 +163,18 @@ tokenForm.addEventListener('submit', async (event) => {
 
 refreshButton.addEventListener('click', async () => {
   await loadDashboard();
+});
+
+calendarRefreshButton.addEventListener('click', async () => {
+  calendarRefreshButton.disabled = true;
+  try {
+    const calendar = await postJson('/api/v1/admin/monitor/calendar/refresh');
+    renderCalendar(calendar);
+  } catch (error) {
+    calendarStatus.textContent = error.message || '重新检测失败';
+  } finally {
+    calendarRefreshButton.disabled = false;
+  }
 });
 
 logoutButton.addEventListener('click', exitDashboard);

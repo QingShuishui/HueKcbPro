@@ -19,7 +19,7 @@ from app.modules.connectors.hue_parser import parse_schedule_html
 
 FALLBACK_WEEK_COUNT = 20
 MINIMUM_SEMESTER_WEEKS = 18
-CALENDAR_SEARCH_WEEKS = 52
+CALENDAR_PROBE_WEEKS = 10
 FALLBACK_REQUEST_HEADERS = {
     "Accept": "text/html, */*; q=0.01",
     "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6",
@@ -40,13 +40,12 @@ class HUEConnector(AcademicConnector):
         return result
 
     def fetch_schedule(self, username: str, password: str) -> NormalizedSchedule:
-        if ddddocr is None:
-            raise RuntimeError("ddddocr is required")
-
         last_error: InvalidCredentialsError | None = None
         for _ in range(self.max_login_attempts):
             try:
-                return self._fetch_schedule_once(username, password)
+                return self._fetch_schedule_for_session(
+                    self._create_authenticated_session(username, password)
+                )
             except InvalidCredentialsError as error:
                 last_error = error
 
@@ -54,7 +53,38 @@ class HUEConnector(AcademicConnector):
             raise last_error
         raise InvalidCredentialsError("invalid academic credentials")
 
-    def _fetch_schedule_once(self, username: str, password: str) -> NormalizedSchedule:
+    def fetch_academic_calendar(
+        self,
+        username: str,
+        password: str,
+    ) -> tuple[str, str, int]:
+        """Detect the configured term once with the dedicated server account."""
+        last_error: InvalidCredentialsError | None = None
+        for _ in range(self.max_login_attempts):
+            try:
+                calendar = self._discover_academic_calendar(
+                    self._create_authenticated_session(username, password)
+                )
+                if calendar is None:
+                    raise RuntimeError("teaching calendar was not available")
+                start_date, total_weeks = calendar
+                end_date = start_date + timedelta(days=total_weeks * 7 - 1)
+                return start_date.isoformat(), end_date.isoformat(), total_weeks
+            except InvalidCredentialsError as error:
+                last_error = error
+
+        if last_error is not None:
+            raise last_error
+        raise RuntimeError("unable to detect teaching calendar")
+
+    def _create_authenticated_session(
+        self,
+        username: str,
+        password: str,
+    ) -> requests.Session:
+        if ddddocr is None:
+            raise RuntimeError("ddddocr is required")
+
         session = requests.Session()
         session.get(self.base_url, timeout=10)
         sess_response = session.get(
@@ -88,21 +118,21 @@ class HUEConnector(AcademicConnector):
         )
         if "xsMain.jsp" not in login_response.url:
             raise InvalidCredentialsError("invalid academic credentials")
+        return session
 
+    def _fetch_schedule_for_session(self, session: requests.Session) -> NormalizedSchedule:
         default_schedule = self._fetch_default_schedule(session)
-        calendar = self._discover_academic_calendar(session)
         if default_schedule is not None and default_schedule.courses:
-            return _with_calendar(default_schedule, calendar)
+            return default_schedule
 
         fallback_schedule = self._fetch_fallback_schedule(
             session,
             semester_label=default_schedule.semester_label if default_schedule else "",
-            semester_start_date=calendar[0] if calendar else None,
         )
         if fallback_schedule.courses:
-            return _with_calendar(fallback_schedule, calendar)
+            return fallback_schedule
 
-        return _with_calendar(default_schedule or fallback_schedule, calendar)
+        return default_schedule or fallback_schedule
 
     def _discover_academic_calendar(
         self,
@@ -112,12 +142,7 @@ class HUEConnector(AcademicConnector):
     ) -> tuple[date, int] | None:
         """Read the homepage teaching calendar instead of guessing its start date."""
         today = today or datetime.now(timezone(timedelta(hours=8))).date()
-        offsets = [0]
-        for week in range(1, CALENDAR_SEARCH_WEEKS + 1):
-            offsets.extend((week * 7, -week * 7))
-
-        for offset in offsets:
-            probe_date = today + timedelta(days=offset)
+        for probe_date in _calendar_probe_dates(today):
             week_info = self._fetch_calendar_week(session, probe_date)
             if week_info is None:
                 continue
@@ -173,11 +198,8 @@ class HUEConnector(AcademicConnector):
         session: requests.Session,
         *,
         semester_label: str = "",
-        semester_start_date: date | None = None,
     ) -> NormalizedSchedule:
-        start_date = semester_start_date or datetime.strptime(
-            get_settings().academic_semester_start_date, "%Y-%m-%d"
-        ).date()
+        start_date = _configured_semester_start_date()
         weekly_results: list[tuple[int, NormalizedSchedule]] = []
 
         with ThreadPoolExecutor(max_workers=FALLBACK_WEEK_COUNT) as executor:
@@ -306,25 +328,39 @@ def _format_week_range(start: int, end: int) -> str:
     return f"{start}-{end}"
 
 
+def _calendar_probe_dates(today: date) -> list[date]:
+    """Probe the configured term near its normal September/February start."""
+    term_match = re.fullmatch(r"(\d{4})-(\d{4})-(\d+)", get_settings().academic_term_id)
+    if term_match and term_match.group(3) == "1":
+        anchor = date(int(term_match.group(1)), 8, 17)
+    elif term_match and term_match.group(3) == "2":
+        anchor = date(int(term_match.group(2)), 2, 2)
+    elif today.month >= 7:
+        anchor = date(today.year, 8, 17)
+    else:
+        anchor = date(today.year, 2, 2)
+
+    first_monday = anchor - timedelta(days=anchor.weekday())
+    return [
+        first_monday + timedelta(days=week * 7)
+        for week in range(CALENDAR_PROBE_WEEKS)
+    ]
+
+
+def _configured_semester_start_date() -> date:
+    from app.modules.calendar.service import get_current_academic_calendar
+
+    calendar = get_current_academic_calendar()
+    if calendar is not None:
+        return date.fromisoformat(calendar["semester_start_date"])
+    return datetime.strptime(
+        get_settings().academic_semester_start_date, "%Y-%m-%d"
+    ).date()
+
+
 def _parse_calendar_week(html: str) -> tuple[int, int] | None:
     text = BeautifulSoup(html, "html.parser").get_text(" ", strip=True)
     match = re.search(r"第\s*(\d+)\s*周\s*/\s*(\d+)\s*周", text)
     if match is None:
         return None
     return int(match.group(1)), int(match.group(2))
-
-
-def _with_calendar(
-    schedule: NormalizedSchedule,
-    calendar: tuple[date, int] | None,
-) -> NormalizedSchedule:
-    if calendar is None:
-        return schedule
-    start_date, total_weeks = calendar
-    end_date = start_date + timedelta(days=total_weeks * 7 - 1)
-    return replace(
-        schedule,
-        semester_start_date=start_date.isoformat(),
-        semester_end_date=end_date.isoformat(),
-        total_weeks=total_weeks,
-    )

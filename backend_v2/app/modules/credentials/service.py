@@ -20,7 +20,7 @@ def encrypt_academic_password(password: str) -> str:
 
 
 def persist_binding_schedule(db, binding: AcademicBinding, password: str, connector_result):
-    normalized_schedule = normalize_connector_schedule(connector_result)
+    normalized_schedule = normalize_connector_schedule(connector_result, db=db)
     encrypted_password = encrypt_academic_password(password)
 
     if binding.credential is None:

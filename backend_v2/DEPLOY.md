@@ -72,6 +72,8 @@ Required edits:
 - `JWT_SECRET`
 - `CREDENTIAL_ENCRYPTION_KEY`
 - `ADMIN_TOKEN`
+- `ACADEMIC_CALENDAR_PROBE_USERNAME`
+- `ACADEMIC_CALENDAR_PROBE_PASSWORD`
 
 For the default compose layout, `DATABASE_URL` should point to the `postgres` service host:
 
@@ -86,6 +88,9 @@ APP_IMAGE=ghcr.io/qingshuishui/kcb-backend-v2
 APP_TAG=backend-v0.1.1
 DEPLOY_BASE_PATH=/opt/huekcb/releases
 ADMIN_TOKEN=replace-with-a-long-random-secret
+ACADEMIC_TERM_ID=2026-2027-1
+ACADEMIC_CALENDAR_PROBE_USERNAME=your-calendar-probe-account
+ACADEMIC_CALENDAR_PROBE_PASSWORD=your-calendar-probe-password
 ```
 
 Recommended host directories:
@@ -107,6 +112,13 @@ This starts:
 - FastAPI API
 - Celery worker
 - Celery beat
+- one-shot academic-calendar bootstrap
+
+The bootstrap task detects the configured term's teaching calendar around its
+normal September or February start, then stores one shared result in Postgres.
+It does not run again while that term already has a stored result. The real
+probe credentials belong only in the server `.env.release`; `.env.release` is
+ignored by Git. Use the admin page's **重新检测** button to force an update.
 
 Only the API service is exposed to the host by default. `postgres` and `redis` stay on the internal Docker network unless you explicitly add host port mappings.
 

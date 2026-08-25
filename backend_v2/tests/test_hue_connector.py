@@ -62,7 +62,7 @@ def test_calendar_discovery_calculates_start_and_minimum_end(monkeypatch):
     monkeypatch.setattr(
         connector,
         "_fetch_calendar_week",
-        lambda _session, probe_date: (1, 10) if probe_date == date(2026, 9, 1) else None,
+        lambda _session, probe_date: (1, 10) if probe_date == date(2026, 8, 31) else None,
     )
 
     assert connector._discover_academic_calendar(Mock(), today=date(2026, 9, 1)) == (
@@ -80,9 +80,54 @@ def test_calendar_discovery_keeps_system_total_weeks(monkeypatch):
     )
 
     assert connector._discover_academic_calendar(Mock(), today=date(2026, 9, 1)) == (
-        date(2026, 8, 24),
+        date(2026, 8, 10),
         22,
     )
+
+
+def test_calendar_discovery_ignores_today_from_a_previous_term(monkeypatch):
+    connector = HUEConnector()
+
+    def calendar_week(_session, probe_date):
+        if probe_date == date(2026, 4, 1):
+            return 10, 22
+        if probe_date == date(2026, 8, 31):
+            return 1, 22
+        return None
+
+    monkeypatch.setattr(connector, "_fetch_calendar_week", calendar_week)
+
+    assert connector._discover_academic_calendar(Mock(), today=date(2026, 4, 1)) == (
+        date(2026, 8, 31),
+        22,
+    )
+
+
+@patch("app.modules.connectors.hue_connector.ddddocr.DdddOcr")
+@patch("app.modules.connectors.hue_connector.requests.Session")
+def test_schedule_fetch_does_not_probe_the_teaching_calendar(
+    session_cls, ocr_cls, monkeypatch
+):
+    session = session_cls.return_value
+    ocr_cls.return_value.classification.return_value = "1234"
+    session.get.side_effect = [
+        _response(),
+        _response(text="abc#111"),
+        _response(content=b"img"),
+    ]
+    session.post.side_effect = [
+        _response(url="https://jwxt.hue.edu.cn/xsMain.jsp"),
+        _response(text=_schedule_html()),
+    ]
+    monkeypatch.setattr(
+        HUEConnector,
+        "_discover_academic_calendar",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("must not probe")),
+    )
+
+    HUEConnector().fetch_schedule("demo_student_id", "pw123")
+
+    assert session.post.call_count == 2
 
 
 @patch("app.modules.connectors.hue_connector.ddddocr.DdddOcr")
@@ -230,11 +275,6 @@ def test_connector_falls_back_to_weekly_endpoint_when_default_schedule_is_empty(
     session = session_cls.return_value
     ocr_cls.return_value.classification.return_value = "1234"
     monkeypatch.setattr("app.modules.connectors.hue_connector.FALLBACK_WEEK_COUNT", 2)
-    monkeypatch.setattr(
-        HUEConnector,
-        "_discover_academic_calendar",
-        lambda *_args, **_kwargs: (date(2026, 8, 31), 22),
-    )
     fallback_calls = []
 
     def fake_week(self, _session, week, request_date):
@@ -264,10 +304,10 @@ def test_connector_falls_back_to_weekly_endpoint_when_default_schedule_is_empty(
     assert result.courses[0].room == "S101, S102"
     assert result.courses[0].raw_weeks == "1-2(周)"
     assert result.courses[0].parsed_weeks == [1, 2]
-    assert sorted(fallback_calls) == [(1, "2026-08-31"), (2, "2026-09-07")]
-    assert result.semester_start_date == "2026-08-31"
-    assert result.semester_end_date == "2027-01-31"
-    assert result.total_weeks == 22
+    assert sorted(fallback_calls) == [(1, "2026-03-02"), (2, "2026-03-09")]
+    assert result.semester_start_date is None
+    assert result.semester_end_date is None
+    assert result.total_weeks is None
     get_settings.cache_clear()
 
 

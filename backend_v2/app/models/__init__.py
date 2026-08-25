@@ -5,6 +5,7 @@ from app.models.refresh_token import RefreshToken
 from app.models.request_log import RequestLog
 from app.models.schedule_snapshot import ScheduleSnapshot
 from app.models.schedule_sync_state import ScheduleSyncState
+from app.models.semester_calendar import SemesterCalendar
 from app.models.user import User
 from app.models.user_client_info import UserClientInfo
 
@@ -16,6 +17,7 @@ __all__ = [
     "RequestLog",
     "ScheduleSnapshot",
     "ScheduleSyncState",
+    "SemesterCalendar",
     "User",
     "UserClientInfo",
 ]

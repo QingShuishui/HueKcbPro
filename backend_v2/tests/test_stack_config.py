@@ -15,6 +15,8 @@ def test_docker_compose_includes_migration_and_healthchecks():
     assert "healthcheck:" in compose
     assert "condition: service_healthy" in compose
     assert "alembic upgrade head" in compose
+    assert "calendar-bootstrap:" in compose
+    assert "app.modules.calendar.bootstrap" in compose
 
 
 def test_readme_documents_real_stack_startup():

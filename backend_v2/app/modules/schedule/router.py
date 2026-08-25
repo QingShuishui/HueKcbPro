@@ -9,6 +9,7 @@ from app.core.db import SessionLocal
 from app.core.security import get_current_user_id
 from app.models.academic_binding import AcademicBinding
 from app.models.schedule_snapshot import ScheduleSnapshot
+from app.modules.calendar.service import get_current_academic_calendar
 from app.modules.admin.monitoring import record_schedule_log
 from app.modules.schedule.cache import get_cached_schedule, set_cached_schedule
 from app.modules.tasks.schedule_tasks import sync_schedule
@@ -49,14 +50,27 @@ def _current_week(semester_start_date: str, total_weeks: int) -> int:
     return min((days_diff // 7) + 1, total_weeks)
 
 
-def _schedule_response_payload(payload: dict) -> dict:
-    semester_start_date = _semester_start_date(payload)
-    total_weeks = _total_weeks(payload)
+def _schedule_response_payload(payload: dict, *, calendar: dict | None = None) -> dict:
+    calendar = calendar if calendar is not None else get_current_academic_calendar()
+    semester_start_date = (
+        calendar["semester_start_date"]
+        if calendar is not None
+        else _semester_start_date(payload)
+    )
+    total_weeks = (
+        max(int(calendar["total_weeks"]), 18)
+        if calendar is not None
+        else _total_weeks(payload)
+    )
     return {
         "semester_label": payload["semester_label"],
         "semester_start_date": semester_start_date,
-        "semester_end_date": payload.get("semester_end_date")
-        or _semester_end_date(semester_start_date, total_weeks),
+        "semester_end_date": (
+            calendar["semester_end_date"]
+            if calendar is not None
+            else payload.get("semester_end_date")
+            or _semester_end_date(semester_start_date, total_weeks)
+        ),
         "total_weeks": total_weeks,
         "current_week": _current_week(semester_start_date, total_weeks),
         "generated_at": payload["generated_at"],
@@ -67,6 +81,7 @@ def _schedule_response_payload(payload: dict) -> dict:
 
 
 def read_current_schedule(user_id: int) -> dict:
+    calendar = get_current_academic_calendar()
     cached = get_cached_schedule(user_id)
     if cached is not None:
         cache_expires_at = cached.get("cache_expires_at")
@@ -77,14 +92,26 @@ def read_current_schedule(user_id: int) -> dict:
             )
         return _schedule_response_payload({
             "semester_label": cached["semester_label"],
-            "semester_start_date": _semester_start_date(cached),
-            "semester_end_date": cached.get("semester_end_date"),
-            "total_weeks": cached.get("total_weeks"),
+            "semester_start_date": (
+                calendar["semester_start_date"]
+                if calendar is not None
+                else _semester_start_date(cached)
+            ),
+            "semester_end_date": (
+                calendar["semester_end_date"]
+                if calendar is not None
+                else cached.get("semester_end_date")
+            ),
+            "total_weeks": (
+                calendar["total_weeks"]
+                if calendar is not None
+                else cached.get("total_weeks")
+            ),
             "generated_at": cached["generated_at"],
             "is_stale": is_stale,
             "last_synced_at": cached.get("last_synced_at"),
             "courses": cached["courses"],
-        })
+        }, calendar=calendar)
 
     with SessionLocal() as db:
         binding = db.query(AcademicBinding).filter_by(user_id=user_id).one_or_none()
@@ -107,9 +134,21 @@ def read_current_schedule(user_id: int) -> dict:
             )
         cache_payload = {
             "semester_label": payload["semester_label"],
-            "semester_start_date": _semester_start_date(payload),
-            "semester_end_date": payload.get("semester_end_date"),
-            "total_weeks": payload.get("total_weeks"),
+            "semester_start_date": (
+                calendar["semester_start_date"]
+                if calendar is not None
+                else _semester_start_date(payload)
+            ),
+            "semester_end_date": (
+                calendar["semester_end_date"]
+                if calendar is not None
+                else payload.get("semester_end_date")
+            ),
+            "total_weeks": (
+                calendar["total_weeks"]
+                if calendar is not None
+                else payload.get("total_weeks")
+            ),
             "generated_at": payload["generated_at"],
             "is_stale": is_stale,
             "last_synced_at": binding.sync_state.last_synced_at,
@@ -117,7 +156,7 @@ def read_current_schedule(user_id: int) -> dict:
             "courses": payload["courses"],
         }
         set_cached_schedule(user_id, cache_payload)
-        return _schedule_response_payload(cache_payload)
+        return _schedule_response_payload(cache_payload, calendar=calendar)
 
 
 def read_sync_status(user_id: int) -> dict:

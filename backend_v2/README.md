@@ -13,6 +13,7 @@ This stack includes:
 - `postgres` as the primary database
 - `redis` as cache and Celery broker
 - `migrate` to run `alembic upgrade head`
+- `calendar-bootstrap` to detect the shared semester calendar once
 - `api` for FastAPI
 - `worker` for Celery jobs
 - `beat` for periodic task scheduling
@@ -39,6 +40,7 @@ Admin monitoring endpoints require `X-Admin-Token` matching `ADMIN_TOKEN`:
 curl -H "X-Admin-Token: $ADMIN_TOKEN" http://127.0.0.1:2581/api/v1/admin/monitor/summary
 curl -H "X-Admin-Token: $ADMIN_TOKEN" http://127.0.0.1:2581/api/v1/admin/monitor/users
 curl -H "X-Admin-Token: $ADMIN_TOKEN" http://127.0.0.1:2581/api/v1/admin/monitor/schedule-logs
+curl -H "X-Admin-Token: $ADMIN_TOKEN" http://127.0.0.1:2581/api/v1/admin/monitor/calendar
 ```
 
 ## Release Deploy

@@ -9,6 +9,10 @@ from app.models.academic_binding import AcademicBinding
 from app.models.request_log import RequestLog
 from app.models.user import User
 from app.models.user_client_info import UserClientInfo
+from app.modules.calendar.service import (
+    get_current_academic_calendar,
+    refresh_current_academic_calendar,
+)
 
 
 router = APIRouter(prefix="/api/v1/admin/monitor", tags=["admin-monitor"])
@@ -199,3 +203,28 @@ def monitor_schedule_logs(
                 for log in logs
             ]
         }
+
+
+@router.get("/calendar")
+def monitor_calendar(x_admin_token: str | None = Header(default=None)) -> dict:
+    require_admin_token(x_admin_token)
+    calendar = get_current_academic_calendar()
+    return {"calendar": calendar}
+
+
+@router.post("/calendar/refresh")
+def refresh_calendar(x_admin_token: str | None = Header(default=None)) -> dict:
+    require_admin_token(x_admin_token)
+    try:
+        calendar = refresh_current_academic_calendar()
+    except Exception as error:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="unable to refresh academic calendar",
+        ) from error
+    return {
+        "semester_start_date": calendar["semester_start_date"],
+        "semester_end_date": calendar["semester_end_date"],
+        "total_weeks": calendar["total_weeks"],
+        "term_id": calendar["term_id"],
+    }

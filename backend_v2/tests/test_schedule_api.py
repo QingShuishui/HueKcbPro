@@ -97,3 +97,49 @@ def test_status_endpoint_returns_sync_metadata(monkeypatch):
 
     assert response.status_code == 200
     assert response.json()["schedule_version"] == 3
+
+
+def test_current_schedule_overrides_legacy_snapshot_with_global_calendar(monkeypatch):
+    from app.core.db import SessionLocal
+    from app.models.semester_calendar import SemesterCalendar
+    from app.modules.schedule import router as schedule_router
+
+    with SessionLocal() as db:
+        db.add(
+            SemesterCalendar(
+                term_id="2026-2027-1",
+                semester_start_date="2026-08-31",
+                semester_end_date="2027-01-31",
+                total_weeks=22,
+                detected_at="2026-08-26T00:00:00+00:00",
+            )
+        )
+        db.commit()
+
+    monkeypatch.setattr(
+        schedule_router,
+        "read_current_schedule",
+        lambda user_id: schedule_router._schedule_response_payload(
+            {
+                "semester_label": "2026秋",
+                "semester_start_date": "2026-09-07",
+                "semester_end_date": "2027-01-25",
+                "total_weeks": 20,
+                "generated_at": "2026-08-26T00:00:00+00:00",
+                "is_stale": False,
+                "last_synced_at": "2026-08-26T00:00:00+00:00",
+                "courses": [],
+            }
+        ),
+    )
+
+    client = TestClient(create_app())
+    response = client.get(
+        "/api/v1/schedule/current",
+        headers={"Authorization": f"Bearer {create_access_token(1)}"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["semester_start_date"] == "2026-08-31"
+    assert response.json()["semester_end_date"] == "2027-01-31"
+    assert response.json()["total_weeks"] == 22
