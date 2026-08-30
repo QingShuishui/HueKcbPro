@@ -12,6 +12,44 @@ import 'package:kcb_pro_android/features/schedule/repositories/schedule_reposito
 import 'package:kcb_pro_android/features/schedule/widgets/schedule_grid.dart';
 
 void main() {
+  testWidgets(
+    'normal schedule starts from backend current week without jumping to week 18',
+    (tester) async {
+      final schedule = Schedule(
+        semesterLabel: '2026秋',
+        semesterStartDate: DateTime(2026, 8, 31),
+        totalWeeks: 22,
+        currentWeek: 1,
+        generatedAt: DateTime(2026, 8, 30),
+        isStale: false,
+        lastSyncedAt: DateTime(2026, 8, 30),
+        courses: const [],
+      );
+      final container = ProviderContainer(
+        overrides: [
+          scheduleRepositoryProvider.overrideWithValue(
+            _StaticScheduleRepository(schedule),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: MaterialApp(
+            home: SchedulePage(initialDate: DateTime(2026, 8, 30)),
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(find.text('第1周'), findsWidgets);
+      expect(find.text('第18周'), findsNothing);
+    },
+  );
+
   testWidgets('shows week header and refresh time', (tester) async {
     final schedule = Schedule(
       semesterLabel: '2026春',
@@ -1026,6 +1064,21 @@ void main() {
       await tester.pump(const Duration(milliseconds: 600));
     },
   );
+}
+
+class _StaticScheduleRepository extends ScheduleRepository {
+  _StaticScheduleRepository(this.schedule);
+
+  final Schedule schedule;
+
+  @override
+  Future<Schedule?> readCachedSchedule() async => null;
+
+  @override
+  Future<Schedule> fetchCurrentSchedule() async => schedule;
+
+  @override
+  Future<void> refreshFromAcademicSystem() async {}
 }
 
 class _FailingOnceScheduleRepository extends ScheduleRepository {

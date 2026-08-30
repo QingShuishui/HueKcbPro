@@ -504,6 +504,29 @@ def test_parser_reads_alphanumeric_course_code():
     assert result.courses[0].code == "CS101"
 
 
+def test_parser_appends_group_to_name_and_keeps_following_room():
+    html = """
+    <div id="timetableDiv">2026秋</div>
+    <table id="kbtable">
+      <tr><th></th><th>周一</th></tr>
+      <tr><td>
+        <div class="kbcontent1">
+          算法设计与分析<br/>
+          分组01<br/>
+          S4108<br/>
+          1-16(周)<br/>
+          张三
+        </div>
+      </td></tr>
+    </table>
+    """
+
+    result = HUEConnector().parse_schedule_html(html)
+
+    assert result.courses[0].name == "算法设计与分析(分组01)"
+    assert result.courses[0].room == "S4108"
+
+
 def test_parser_reads_home_kb_table_fallback_html():
     html = """
     <table id="tab1" class="table kb_table">

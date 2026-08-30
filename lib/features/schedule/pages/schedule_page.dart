@@ -44,10 +44,9 @@ class SchedulePage extends ConsumerStatefulWidget {
 class _SchedulePageState extends ConsumerState<SchedulePage>
     with WidgetsBindingObserver {
   late DateTime _today = _normalizeDate(widget.initialDate ?? DateTime.now());
-  late int _selectedWeek = _weekForDate(
-    _today,
-    _semesterStartDateForSchedule(widget.schedule),
-  );
+  late int _selectedWeek = widget.schedule == null
+      ? _minWeek
+      : _weekForDate(_today, _semesterStartDateForSchedule(widget.schedule));
   late final ScrollController _weekStripController = ScrollController(
     initialScrollOffset: (_selectedWeek - 1) * _weekTileExtent,
   );
@@ -210,7 +209,7 @@ class _SchedulePageState extends ConsumerState<SchedulePage>
   }) async {
     final previousCurrentWeek = _weekForDate(
       _today,
-      _semesterStartDateForSchedule(widget.schedule),
+      _semesterStartDateForCurrentSchedule(),
     );
     final latestToday = _normalizeDate(
       _currentMoment(syncPendingDebugDate: syncPendingDebugDate),
@@ -237,10 +236,7 @@ class _SchedulePageState extends ConsumerState<SchedulePage>
 
     if (shouldFollowCurrentWeek) {
       await _jumpToWeek(
-        _weekForDate(
-          latestToday,
-          _semesterStartDateForSchedule(widget.schedule),
-        ),
+        _weekForDate(latestToday, _semesterStartDateForCurrentSchedule()),
       );
     }
   }
@@ -274,7 +270,7 @@ class _SchedulePageState extends ConsumerState<SchedulePage>
   Future<void> _jumpToToday() async {
     await _syncCurrentDate(followCurrentWeek: false);
     await _jumpToWeek(
-      _weekForDate(_today, _semesterStartDateForSchedule(widget.schedule)),
+      _weekForDate(_today, _semesterStartDateForCurrentSchedule()),
     );
   }
 
@@ -302,7 +298,7 @@ class _SchedulePageState extends ConsumerState<SchedulePage>
     if (_debugDateSyncImmediately) {
       final previousCurrentWeek = _weekForDate(
         _today,
-        _semesterStartDateForSchedule(widget.schedule),
+        _semesterStartDateForCurrentSchedule(),
       );
       final shouldFollowCurrentWeek = _selectedWeek == previousCurrentWeek;
       setState(() {
@@ -312,10 +308,7 @@ class _SchedulePageState extends ConsumerState<SchedulePage>
       });
       if (shouldFollowCurrentWeek) {
         await _jumpToWeek(
-          _weekForDate(
-            normalized,
-            _semesterStartDateForSchedule(widget.schedule),
-          ),
+          _weekForDate(normalized, _semesterStartDateForCurrentSchedule()),
         );
       }
       return;
@@ -326,7 +319,7 @@ class _SchedulePageState extends ConsumerState<SchedulePage>
     });
   }
 
-  Future<void> _jumpToWeek(int week) async {
+  Future<void> _jumpToWeek(int week, {bool animated = true}) async {
     final clampedWeek = week.clamp(_minWeek, _maxWeekForCurrentSchedule());
     if (clampedWeek == _selectedWeek) {
       return;
@@ -336,20 +329,29 @@ class _SchedulePageState extends ConsumerState<SchedulePage>
       _programmaticWeekTarget = clampedWeek;
     });
     try {
-      await Future.wait([
-        if (_weekStripController.hasClients)
-          _weekStripController.animateTo(
-            (clampedWeek - 1) * _weekTileExtent,
-            duration: const Duration(milliseconds: 220),
-            curve: Curves.easeOutCubic,
-          ),
-        if (_pageController.hasClients)
-          _pageController.animateToPage(
-            clampedWeek - 1,
-            duration: const Duration(milliseconds: 220),
-            curve: Curves.easeOutCubic,
-          ),
-      ]);
+      if (animated) {
+        await Future.wait([
+          if (_weekStripController.hasClients)
+            _weekStripController.animateTo(
+              (clampedWeek - 1) * _weekTileExtent,
+              duration: const Duration(milliseconds: 220),
+              curve: Curves.easeOutCubic,
+            ),
+          if (_pageController.hasClients)
+            _pageController.animateToPage(
+              clampedWeek - 1,
+              duration: const Duration(milliseconds: 220),
+              curve: Curves.easeOutCubic,
+            ),
+        ]);
+      } else {
+        if (_weekStripController.hasClients) {
+          _weekStripController.jumpTo((clampedWeek - 1) * _weekTileExtent);
+        }
+        if (_pageController.hasClients) {
+          _pageController.jumpToPage(clampedWeek - 1);
+        }
+      }
     } finally {
       if (mounted) {
         setState(() {
@@ -387,6 +389,12 @@ class _SchedulePageState extends ConsumerState<SchedulePage>
     return schedule?.semesterStartDate ?? _defaultSemesterStartDate;
   }
 
+  DateTime _semesterStartDateForCurrentSchedule() {
+    return _semesterStartDateForSchedule(
+      widget.schedule ?? ref.read(scheduleControllerProvider).valueOrNull,
+    );
+  }
+
   static int _maxWeekForSchedule(Schedule? schedule) {
     if (schedule == null) {
       return _minimumWeekCount;
@@ -397,10 +405,7 @@ class _SchedulePageState extends ConsumerState<SchedulePage>
       _minimumWeekCount,
       schedule.totalWeeks ?? _minimumWeekCount,
     );
-    return math.min(
-      semesterWeeks,
-      math.max(_minimumWeekCount, lastCourseWeek),
-    );
+    return math.min(semesterWeeks, math.max(_minimumWeekCount, lastCourseWeek));
   }
 
   int _maxWeekForCurrentSchedule() {
@@ -487,11 +492,12 @@ class _SchedulePageState extends ConsumerState<SchedulePage>
   }
 
   void _syncWeekSelectionFromScheduleMetadata(Schedule? schedule) {
-    final semesterStartDate = schedule?.semesterStartDate;
-    final currentWeek = schedule?.currentWeek;
-    if (semesterStartDate == null || currentWeek == null) {
+    if (schedule == null) {
       return;
     }
+    final semesterStartDate = _semesterStartDateForSchedule(schedule);
+    final currentWeek =
+        schedule.currentWeek ?? _weekForDate(_today, semesterStartDate);
     if (_lastAppliedSemesterStartDate == semesterStartDate &&
         _lastAppliedCurrentWeek == currentWeek) {
       return;
@@ -509,7 +515,7 @@ class _SchedulePageState extends ConsumerState<SchedulePage>
       if (!mounted) {
         return;
       }
-      unawaited(_jumpToWeek(targetWeek));
+      unawaited(_jumpToWeek(targetWeek, animated: false));
     });
   }
 

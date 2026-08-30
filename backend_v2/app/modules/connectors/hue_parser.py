@@ -210,6 +210,21 @@ def parse_schedule_html(html: str) -> NormalizedSchedule:
 
                         course_name, course_code = split_course_name_code(lines[0])
 
+                        group_line = next(
+                            (
+                                line
+                                for line in lines[1:]
+                                if re.search(
+                                    r"(?:分组|组别)\s*[0-9A-Za-z一二三四五六七八九十]+",
+                                    line,
+                                )
+                            ),
+                            None,
+                        )
+                        if group_line is not None:
+                            course_name = f"{course_name}({group_line})"
+                            lines.remove(group_line)
+
                         teacher = ""
                         location = ""
                         weeks = ""
