@@ -549,6 +549,45 @@ def test_parser_deduplicates_group_suffix_when_name_already_contains_group():
     assert result.courses[0].teacher == "李老师"
 
 
+def test_parser_reads_teacher_from_course_metadata():
+    html = """
+    <table id="kbtable">
+      <tr><th></th><th>周一</th></tr>
+      <tr><td>
+        <div class="kbcontent1" title="课程名称：JavaEE架构与应用&lt;br/&gt;任课教师：王老师">
+          JavaEE架构与应用<br/>
+          报2<br/>
+          1-16(周)[01-02节]
+        </div>
+      </td></tr>
+    </table>
+    """
+
+    result = HUEConnector().parse_schedule_html(html)
+
+    assert result.courses[0].teacher == "王老师"
+    assert result.courses[0].room == "报2"
+
+
+def test_parser_reads_teacher_from_json_like_course_attribute():
+    html = """
+    <table id="kbtable">
+      <tr><th></th><th>周一</th></tr>
+      <tr><td>
+        <div class="kbcontent1" data-info='{"teacher":"王老师"}'>
+          JavaEE架构与应用<br/>
+          报2<br/>
+          1-16(周)[01-02节]
+        </div>
+      </td></tr>
+    </table>
+    """
+
+    result = HUEConnector().parse_schedule_html(html)
+
+    assert result.courses[0].teacher == "王老师"
+
+
 def test_parser_keeps_teacher_before_week_and_room_after_week():
     html = """
     <div id="timetableDiv">2026秋</div>
@@ -602,6 +641,32 @@ def test_parser_keeps_group_teacher_and_room_fields_in_order():
     assert result.courses[0].name == "操作系统(分组02)"
     assert result.courses[0].teacher == "许光"
     assert result.courses[0].room == "S4108"
+
+
+def test_parser_reads_teacher_from_hidden_xskb_course_details():
+    html = """
+    <table id="kbtable">
+      <tr><th></th><th>周一</th></tr>
+      <tr><td>
+        <div id="course-1-1" class="kbcontent1">
+          Python编程<br/>
+          <font title="周次(节次)">1-16(周)</font><br/>
+          <font title="教室">报4</font>
+        </div>
+        <div id="course-1-2" class="kbcontent" style="display:none">
+          Python编程<br/>
+          <font title="老师">龚希</font><br/>
+          <font title="周次(节次)">1-16(周)[05-06节]</font><br/>
+          <font title="教室">报4</font>
+        </div>
+      </td></tr>
+    </table>
+    """
+
+    result = HUEConnector().parse_schedule_html(html)
+
+    assert result.courses[0].teacher == "龚希"
+    assert result.courses[0].room == "报4"
 
 
 def test_parser_preserves_online_learning_location_label():

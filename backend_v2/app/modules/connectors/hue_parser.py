@@ -124,6 +124,70 @@ def _parse_teacher_and_room(lines: list[str]) -> tuple[str, str, str]:
     return teacher, extract_location_code(location), weeks
 
 
+def _teacher_from_markup(markup) -> str:
+    """Read a teacher stored in a timetable node's metadata.
+
+    Some HUE deployments keep the visible cell compact and put the full
+    course details in ``title``/``data-*`` attributes instead.
+    """
+    for element in markup.find_all(True):
+        for key, value in element.attrs.items():
+            key_lower = key.lower()
+            if key_lower in {"class", "style", "id", "href", "src"}:
+                continue
+            values = value if isinstance(value, list) else [value]
+            for raw_value in values:
+                raw_text = str(raw_value).strip()
+                if not raw_text:
+                    continue
+                metadata = BeautifulSoup(raw_text, "html.parser")
+                fields = _parse_home_course_title(raw_text)
+                for label in ("任课教师", "授课教师", "上课教师", "教师", "老师"):
+                    teacher = fields.get(label, "").strip()
+                    if teacher:
+                        return teacher
+                plain_text = metadata.get_text(" ", strip=True)
+                match = re.search(
+                    r"(?:任课教师|授课教师|上课教师|教师|老师)\s*[:：]\s*"
+                    r"([^,，;；|]+)",
+                    plain_text,
+                )
+                if match:
+                    return match.group(1).strip()
+                # Some pages put a JSON-like key in data attributes or an
+                # inline handler instead of using a human-readable label.
+                match = re.search(
+                    r"[\"']?(?:teacher|teacherName|teacher_name)[\"']?\s*[:=]\s*"
+                    r"[\"']([^\"']+)[\"']",
+                    raw_text,
+                    re.IGNORECASE,
+                )
+                if match:
+                    return match.group(1).strip()
+    return ""
+
+
+def _teacher_from_detail_markup(markup) -> str:
+    """Read the explicit teacher node from HUE's hidden course details.
+
+    ``xskb_list.do`` renders a compact ``kbcontent1`` preview and a matching
+    hidden ``kbcontent`` node.  The latter contains ``<font title='老师'>``
+    even when the visible preview omits the teacher completely.
+    """
+    for element in markup.find_all(True):
+        title = str(element.get("title", "")).strip()
+        if title and any(label in title for label in ("老师", "教师", "任课")):
+            teacher = element.get_text(" ", strip=True)
+            if teacher:
+                return teacher
+    return _teacher_from_markup(markup)
+
+
+def _split_course_blocks(markup: str) -> list[str]:
+    """Split visible and hidden timetable markup on either dash separator."""
+    return re.split(r"-{10,}", markup)
+
+
 def parse_weeks(week_str: str) -> list[int]:
     if not week_str or "(周)" not in week_str:
         return []
@@ -308,7 +372,28 @@ def parse_schedule_html(html: str) -> NormalizedSchedule:
                     if "sykb1" in div.get("class", []):
                         continue
 
-                    for block in str(div).split("----------------------"):
+                    visible_blocks = _split_course_blocks(str(div))
+                    visible_id = div.get("id", "")
+                    detail_ids = {visible_id}
+                    if visible_id.endswith("-1"):
+                        detail_ids.add(f"{visible_id[:-2]}-2")
+                    detail_div = next(
+                        (
+                            candidate
+                            for candidate in cell.find_all("div")
+                            if candidate.get("id") in detail_ids
+                            and "kbcontent" in candidate.get("class", [])
+                            and "kbcontent1" not in candidate.get("class", [])
+                        ),
+                        None,
+                    )
+                    detail_blocks = (
+                        _split_course_blocks(str(detail_div))
+                        if detail_div is not None
+                        else []
+                    )
+
+                    for block_index, block in enumerate(visible_blocks):
                         block_soup = BeautifulSoup(block, "html.parser")
                         lines = [
                             line
@@ -340,6 +425,12 @@ def parse_schedule_html(html: str) -> NormalizedSchedule:
                             lines.remove(group_line)
 
                         teacher, location, weeks = _parse_teacher_and_room(lines[1:])
+                        if block_index < len(detail_blocks):
+                            teacher = _teacher_from_detail_markup(
+                                BeautifulSoup(detail_blocks[block_index], "html.parser")
+                            ) or teacher
+                        if not teacher:
+                            teacher = _teacher_from_markup(block_soup)
 
                         courses.append(
                             NormalizedCourse(
