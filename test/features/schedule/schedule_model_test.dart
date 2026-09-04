@@ -2,6 +2,31 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:kcb_pro_android/features/schedule/models/schedule.dart';
 
 void main() {
+  test('normalizes legacy grouped names and optional teacher fields', () {
+    final schedule = Schedule.fromJson({
+      'semester_label': '2026秋',
+      'semester_start_date': '2026-09-07',
+      'generated_at': '2026-09-01T00:00:00Z',
+      'is_stale': false,
+      'last_synced_at': null,
+      'courses': [
+        {
+          'name': '算法设计与分析((分组01))',
+          'code': '',
+          'room': 'S4108',
+          'weekday': 1,
+          'lesson_start': 1,
+          'lesson_end': 2,
+          'raw_weeks': '1-16(周)',
+          'parsed_weeks': [1, 2],
+        },
+      ],
+    });
+
+    expect(schedule.courses.single.name, '算法设计与分析(分组01)');
+    expect(schedule.courses.single.teacher, isEmpty);
+  });
+
   test('parses stale schedule response with course list', () {
     final schedule = Schedule.fromJson({
       'semester_label': '2026春',

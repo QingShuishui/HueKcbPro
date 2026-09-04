@@ -27,19 +27,110 @@ ROMAN_NUMERAL_SUFFIXES = {
     "X",
 }
 
+_GROUP_CONTENT_RE = re.compile(
+    r"(?:分组|组别)\s*[0-9A-Za-z一二三四五六七八九十]+"
+)
+_GROUP_SUFFIX_RE = re.compile(
+    r"^(?P<base>.*?)[(（]+\s*(?P<group>(?:分组|组别)\s*"
+    r"[0-9A-Za-z一二三四五六七八九十]+)\s*[)）]+$"
+)
+
+
+def _group_suffix(value: str) -> str | None:
+    match = _GROUP_CONTENT_RE.search(value or "")
+    if match is None:
+        return None
+    group = re.sub(r"\s+", "", match.group(0))
+    return f"({group})"
+
+
+def _normalize_course_group_name(name: str, group_line: str | None = None) -> str:
+    """Return one canonical ``课程名(分组XX)`` suffix.
+
+    HUE has emitted both a grouped name and a separate group line in some
+    timetable views. Normalizing before and after appending prevents output
+    such as ``课程名((分组01))`` or a duplicated ``(分组01)(分组01)``.
+    """
+    normalized = re.sub(r"\s+", " ", name or "").strip()
+    suffix = _group_suffix(group_line or "")
+    if suffix is not None:
+        existing = _GROUP_SUFFIX_RE.match(normalized)
+        if existing is None or _group_suffix(existing.group("group")) != suffix:
+            normalized = f"{normalized}{suffix}"
+
+    existing = _GROUP_SUFFIX_RE.match(normalized)
+    if existing is None:
+        return normalized
+    group = re.sub(r"\s+", "", existing.group("group"))
+    return f"{existing.group('base').rstrip()}({group})"
+
 
 def extract_location_code(location: str) -> str:
     if not location:
         return location
 
+    if re.search(r"APP\s*线上(?:课程)?学习", location, re.IGNORECASE):
+        return "APP线上课程学习"
+
     match = re.match(r"^[A-Za-z0-9]+", location)
     return match.group(0) if match else location
+
+
+def _is_location_line(line: str) -> bool:
+    if not line:
+        return False
+    return bool(
+        re.search(r"^[A-Za-z]{1,4}-?\d{3,5}(?:\D|$)", line)
+        or re.search(r"^\d{3,5}(?:\D|$)", line)
+        or re.search(r"(?:楼栋室号|实验室|教室|教学楼|体育馆|校区|报告厅|操场)", line)
+        or re.search(r"(?:^|\s)(?:报|综|机|理|文|艺|体|教|实|阶|培|训|创|学)\s*\d{1,4}(?:\D|$)", line)
+        or re.search(r"APP\s*线上(?:课程)?学习", line, re.IGNORECASE)
+    )
+
+
+def _parse_teacher_and_room(lines: list[str]) -> tuple[str, str, str]:
+    """Extract week, teacher and room without assuming their display order.
+
+    HUE renders both `teacher -> week -> room` and `room -> week -> teacher`
+    depending on the timetable view. Room-like values are identified first;
+    the remaining human-readable value is kept as the complete teacher name.
+    """
+    weeks = ""
+    details: list[str] = []
+    for line in lines:
+        if "(周)" in line and not weeks:
+            weeks = line
+        elif line:
+            details.append(line.strip())
+
+    location_indices = [
+        index for index, line in enumerate(details) if _is_location_line(line)
+    ]
+    if location_indices:
+        location = "、".join(details[index] for index in location_indices)
+        teacher_values = [
+            line for index, line in enumerate(details) if index not in location_indices
+        ]
+        teacher = "、".join(teacher_values)
+    elif len(details) >= 2:
+        # When a room has no recognizable prefix, HUE's detail order is
+        # teacher followed by room (e.g. `龚希` then `报4`).
+        teacher = "、".join(details[:-1])
+        location = details[-1]
+    elif details:
+        teacher, location = details[0], ""
+    else:
+        teacher, location = "", ""
+    return teacher, extract_location_code(location), weeks
 
 
 def parse_weeks(week_str: str) -> list[int]:
     if not week_str or "(周)" not in week_str:
         return []
 
+    # The timetable often puts lesson numbers on the same line, e.g.
+    # `1-16(周)[05-06节]`; strip that bracket before parsing week ranges.
+    week_str = re.sub(r"\[.*?\]", "", week_str)
     week_str = week_str.replace("(周)", "").strip()
     weeks: list[int] = []
     for part in week_str.split(","):
@@ -47,8 +138,11 @@ def parse_weeks(week_str: str) -> list[int]:
         if not part:
             continue
         if "-" in part:
-            start, end = part.split("-")
-            weeks.extend(range(int(start), int(end) + 1))
+            range_match = re.fullmatch(r"(\d+)\s*-\s*(\d+)", part)
+            if range_match is None:
+                continue
+            start, end = (int(value) for value in range_match.groups())
+            weeks.extend(range(start, end + 1))
         else:
             weeks.append(int(part))
     return weeks
@@ -95,6 +189,22 @@ def parse_home_schedule_table(table) -> list[NormalizedCourse]:
 
                 course_name, course_code = split_course_name_code(raw_name)
                 raw_time = fields.get("上课时间", "")
+                # Some HUE deployments expose the teacher only in the title
+                # metadata of the home timetable, while others omit the field
+                # entirely. Preserve every known spelling when it is present.
+                teacher = next(
+                    (
+                        fields.get(key, "").strip()
+                        for key in (
+                            "任课教师",
+                            "授课教师",
+                            "教师",
+                            "老师",
+                        )
+                        if fields.get(key, "").strip()
+                    ),
+                    "",
+                )
                 title_weekday = _parse_home_weekday(raw_time)
                 lesson_blocks = _parse_home_lesson_blocks(
                     raw_time,
@@ -107,7 +217,7 @@ def parse_home_schedule_table(table) -> list[NormalizedCourse]:
                         NormalizedCourse(
                             name=course_name,
                             code=course_code,
-                            teacher="",
+                            teacher=teacher,
                             room=extract_location_code(
                                 fields.get("上课地点", "").strip()
                             ),
@@ -209,6 +319,7 @@ def parse_schedule_html(html: str) -> NormalizedSchedule:
                             continue
 
                         course_name, course_code = split_course_name_code(lines[0])
+                        course_name = _normalize_course_group_name(course_name)
 
                         group_line = next(
                             (
@@ -222,25 +333,13 @@ def parse_schedule_html(html: str) -> NormalizedSchedule:
                             None,
                         )
                         if group_line is not None:
-                            course_name = f"{course_name}({group_line})"
+                            course_name = _normalize_course_group_name(
+                                course_name,
+                                group_line,
+                            )
                             lines.remove(group_line)
 
-                        teacher = ""
-                        location = ""
-                        weeks = ""
-                        for line in lines[1:]:
-                            if "(周)" in line:
-                                weeks = line
-                            elif not location and line:
-                                location = line
-                            elif (
-                                not teacher
-                                and location
-                                and line
-                                and len(line) <= 8
-                                and not any(char.isdigit() for char in line)
-                            ):
-                                teacher = line
+                        teacher, location, weeks = _parse_teacher_and_room(lines[1:])
 
                         courses.append(
                             NormalizedCourse(

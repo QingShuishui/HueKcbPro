@@ -527,6 +527,102 @@ def test_parser_appends_group_to_name_and_keeps_following_room():
     assert result.courses[0].room == "S4108"
 
 
+def test_parser_deduplicates_group_suffix_when_name_already_contains_group():
+    html = """
+    <table id="kbtable">
+      <tr><th></th><th>周一</th></tr>
+      <tr><td>
+        <div class="kbcontent1">
+          算法设计与分析((分组01))<br/>
+          (分组01)<br/>
+          李老师<br/>
+          1-16(周)[01-02节]<br/>
+          S4108人工智能实验室
+        </div>
+      </td></tr>
+    </table>
+    """
+
+    result = HUEConnector().parse_schedule_html(html)
+
+    assert result.courses[0].name == "算法设计与分析(分组01)"
+    assert result.courses[0].teacher == "李老师"
+
+
+def test_parser_keeps_teacher_before_week_and_room_after_week():
+    html = """
+    <div id="timetableDiv">2026秋</div>
+    <table id="kbtable">
+      <tr><th></th><th>周一</th></tr>
+      <tr><td>
+        <div class="kbcontent1">
+          Python编程<br/>
+          龚希<br/>
+          1-16(周)[05-06节]<br/>
+          报4
+        </div>
+      </td></tr>
+      <tr><td>
+        <div class="kbcontent1">
+          JavaWeb程序设计<br/>
+          SIT1<br/>
+          1-8(周)[07-08节]<br/>
+          S4202智慧教学实验室
+        </div>
+      </td></tr>
+    </table>
+    """
+
+    result = HUEConnector().parse_schedule_html(html)
+
+    assert result.courses[0].teacher == "龚希"
+    assert result.courses[0].room == "报4"
+    assert result.courses[1].teacher == "SIT1"
+    assert result.courses[1].room == "S4202"
+
+
+def test_parser_keeps_group_teacher_and_room_fields_in_order():
+    html = """
+    <table id="kbtable">
+      <tr><th></th><th>周一</th></tr>
+      <tr><td>
+        <div class="kbcontent1">
+          操作系统<br/>
+          (分组02)<br/>
+          许光<br/>
+          1,3,5,7,9,11,13,15(周)[09-10节]<br/>
+          S4108人工智能实验室
+        </div>
+      </td></tr>
+    </table>
+    """
+
+    result = HUEConnector().parse_schedule_html(html)
+
+    assert result.courses[0].name == "操作系统(分组02)"
+    assert result.courses[0].teacher == "许光"
+    assert result.courses[0].room == "S4108"
+
+
+def test_parser_preserves_online_learning_location_label():
+    html = """
+    <table id="kbtable">
+      <tr><th></th><th>周一</th></tr>
+      <tr><td><div class="kbcontent1">
+        国家安全教育<br/>
+        刘雯<br/>
+        6-11(周)[09-10节]<br/>
+        APP线上课程学习
+      </div></td></tr>
+    </table>
+    """
+
+    result = HUEConnector().parse_schedule_html(html)
+
+    assert result.courses[0].teacher == "刘雯"
+    assert result.courses[0].room == "APP线上课程学习"
+
+
 def test_parser_reads_home_kb_table_fallback_html():
     html = """
     <table id="tab1" class="table kb_table">
@@ -586,6 +682,22 @@ def test_parser_reads_home_kb_table_fallback_html():
     assert result.courses[3].name == "高等数学AⅡ"
     assert result.courses[3].lesson_start == 7
     assert result.courses[3].lesson_end == 8
+
+
+def test_parser_reads_teacher_from_home_table_metadata():
+    html = """
+    <table id="tab1" class="table kb_table">
+      <tr><th>周/节次</th><th>星期一</th></tr>
+      <tr><td>上午1-2节</td><td>
+        <p title="课程名称：JavaEE架构与应用&lt;br/&gt;任课教师：王老师&lt;br/&gt;上课时间：第1周 星期一 [01-02]节&lt;br/&gt;上课地点：S4202智慧教学实验室">JavaEE架构与应用</p>
+      </td></tr>
+    </table>
+    """
+
+    result = HUEConnector().parse_schedule_html(html)
+
+    assert result.courses[0].teacher == "王老师"
+    assert result.courses[0].room == "S4202"
 
 
 def test_parser_splits_full_day_home_course_into_standard_lesson_rows():
